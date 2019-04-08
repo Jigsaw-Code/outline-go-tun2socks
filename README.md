@@ -18,6 +18,8 @@ Go package for building [go-tun2socks](https://github.com/eycorsican/go-tun2sock
 
 We use a custom Golang runtime to build the iOS and macOS framework built off Go 1.12. The [patch](https://go-review.googlesource.com/c/go/+/159117) improves memory reporting to the OS. This should not be necessary after Go 1.13 is released (scheduled for August 2019).
 
+Additionally, Go 1.12 calls private APIs on Darwin, which is not approved for Mac App Store distribution. We have applied this [patch](https://go-review.googlesource.com/c/go/+/170640/), scheduled for release on Go 1.12.2.
+
 You can use our pre-compiled Darwin binary, at `tools/go` or build it yourself:
 
 ```bash
@@ -29,8 +31,9 @@ mv go go1.12
 git clone https://go.googlesource.com/go
 cd go
 git checkout release-branch.go1.12
-# Apply the patch.
+# Apply the patches.
 git fetch https://go.googlesource.com/go refs/changes/17/159117/5 && git cherry-pick FETCH_HEAD
+git fetch https://go.googlesource.com/go refs/changes/40/170640/6 && git cherry-pick FETCH_HEAD
 # Update the version.
 echo "go1.12-dev-runtime" > VERSION
 # Build the runtime.
