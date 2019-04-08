@@ -19,7 +19,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/eycorsican/go-tun2socks/common/dns/cache"
 	"github.com/eycorsican/go-tun2socks/core"
 	"github.com/eycorsican/go-tun2socks/proxy/dnsfallback"
 	"github.com/eycorsican/go-tun2socks/proxy/socks"
@@ -101,7 +100,7 @@ func (t *tunnel) registerConnectionHandlers() {
 	var udpHandler core.UDPConnHandler
 	if t.isUDPEnabled {
 		udpHandler = socks.NewUDPHandler(
-			t.host, t.port, 30*time.Second, cache.NewSimpleDnsCache(), nil)
+			t.host, t.port, 30*time.Second, nil, nil)
 	} else {
 		udpHandler = dnsfallback.NewUDPHandler()
 	}
