@@ -15,9 +15,6 @@
 # limitations under the License.
 
 readonly BUILD_DIR=build/android
-readonly BIN_DIR=bin/android
-readonly TUN2SOCKS_LIB=tun2socks.aar
 
 rm -rf $BUILD_DIR
 make clean && make android
-cp -R $BUILD_DIR/$TUN2SOCKS_LIB $BIN_DIR/

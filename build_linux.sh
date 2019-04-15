@@ -15,8 +15,7 @@
 # limitations under the License.
 
 readonly BUILD_DIR=build/linux
-readonly BIN_DIR=bin/linux
 
 rm -rf $BUILD_DIR
 make clean && make linux
-cp $BUILD_DIR/tun2socks-linux-amd64 $BIN_DIR/tun2socks
+mv $BUILD_DIR/tun2socks-linux-amd64 $BUILD_DIR/tun2socks

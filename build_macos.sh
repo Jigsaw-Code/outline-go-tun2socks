@@ -15,13 +15,9 @@
 # limitations under the License.
 
 readonly BUILD_DIR=build/macos
-readonly BIN_DIR=bin/macos
 readonly TUN2SOCKS_FRAMEWORK=Tun2socks.framework
 
 rm -rf $BUILD_DIR
 make clean && make macos
 # Add Info.plist
 cp apple/Info.plist $BUILD_DIR/$TUN2SOCKS_FRAMEWORK/Versions/A/Resources/
-
-rm -rf $BIN_DIR/$TUN2SOCKS_FRAMEWORK
-cp -R $BUILD_DIR/$TUN2SOCKS_FRAMEWORK $BIN_DIR/
