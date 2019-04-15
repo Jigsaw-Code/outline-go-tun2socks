@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-readonly BUILD_DIR=build/ios
-readonly BIN_DIR=bin/ios
 readonly TUN2SOCKS_FRAMEWORK=Tun2socks.framework
 
 rm -rf $BUILD_DIR
@@ -31,5 +29,3 @@ popd > /dev/null
 
 # Add Info.plist
 cp apple/Info.plist $BUILD_DIR/$TUN2SOCKS_FRAMEWORK/
-
-cp -R $BUILD_DIR/$TUN2SOCKS_FRAMEWORK $BIN_DIR/
