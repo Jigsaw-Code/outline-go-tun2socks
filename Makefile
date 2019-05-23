@@ -6,7 +6,7 @@ XGOCMD=xgo
 BUILDDIR=$(shell pwd)/build
 IMPORT_PATH=github.com/Jigsaw-Code/outline-go-tun2socks
 LDFLAGS='-s -w'
-TUN2SOCKS_VERSION=v1.13.2
+TUN2SOCKS_VERSION=v1.14.2
 TUN2SOCKS_SRC_PATH=$(GOPATH)/src/github.com/eycorsican/go-tun2socks
 TUN2SOCKS_MOD_PATH=$(GOPATH)/pkg/mod/github.com/eycorsican/go-tun2socks\@$(TUN2SOCKS_VERSION)
 XGO_LDFLAGS='-s -w -X main.version=$(TUN2SOCKS_VERSION)'
@@ -40,7 +40,9 @@ define modularize
 	# Symlink the current module and the go-tun2socks module in $GOPATH.
 	# go-tun2socks should not be in $GOPATH for this to work.
 	# TODO: remove this once gomobile enables modules in Go 1.13.
+	mkdir -p $(GOPATH)/src/$(shell dirname $(IMPORT_PATH))
 	ln -s $(shell pwd) $(GOPATH)/src/$(IMPORT_PATH)
+	mkdir -p $(shell dirname $(TUN2SOCKS_SRC_PATH))
 	ln -s $(TUN2SOCKS_MOD_PATH) $(TUN2SOCKS_SRC_PATH)
 endef
 
