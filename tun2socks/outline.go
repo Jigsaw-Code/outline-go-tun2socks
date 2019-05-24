@@ -25,24 +25,17 @@ import (
 )
 
 // Tunnel represents a tunnel from a TUN device to a server.
-type Tunnel interface {
-	// IsConnected indicates whether the tunnel is in a connected state.
-	IsConnected() bool
+type OutlineTunnel interface {
+	Tunnel
 	// SetUDPEnabled indicates whether the tunnel and/or the network support UDP traffic.
 	SetUDPEnabled(isUDPEnabled bool)
-	// Disconnect disconnects the tunnel.
-	Disconnect()
-	// Write writes input data to the TUN interface.
-	Write(data []byte) (int, error)
 }
 
-type tunnel struct {
+type outlinetunnel struct {
+	*tunnel
 	host         string
 	port         uint16
-	isConnected  bool
 	isUDPEnabled bool
-	lwipStack    core.LWIPStack
-	tunWriter    io.WriteCloser
 }
 
 // NewTunnel connects a tunnel to a SOCKS5 server and returns a `Tunnel` object.
@@ -51,25 +44,20 @@ type tunnel struct {
 // `port` is the port of the SOCKS server.
 // `isUDPEnabled` indicates if the SOCKS server and the network support proxying UDP traffic.
 // `tunWriter` is used to output packets back to the TUN device.
-func NewTunnel(host string, port uint16, isUDPEnabled bool, tunWriter io.WriteCloser) (Tunnel, error) {
+func NewTunnel(host string, port uint16, isUDPEnabled bool, tunWriter io.WriteCloser) (OutlineTunnel, error) {
 	if host == "" || tunWriter == nil {
 		return nil, errors.New("Must provide a valid host address, and TUN writer")
 	}
-	var lwipStack = core.NewLWIPStack()
 	core.RegisterOutputFn(func(data []byte) (int, error) {
 		return tunWriter.Write(data)
 	})
-	t := &tunnel{host: host, port: port, isUDPEnabled: isUDPEnabled, lwipStack: lwipStack,
-		tunWriter: tunWriter, isConnected: true}
+	base := &tunnel{tunWriter, core.NewLWIPStack(), true}
+	t := &outlinetunnel{base, host, port, isUDPEnabled}
 	t.registerConnectionHandlers()
 	return t, nil
 }
 
-func (t *tunnel) IsConnected() bool {
-	return t.isConnected
-}
-
-func (t *tunnel) SetUDPEnabled(isUDPEnabled bool) {
+func (t *outlinetunnel) SetUDPEnabled(isUDPEnabled bool) {
 	if t.isUDPEnabled == isUDPEnabled {
 		return
 	}
@@ -78,25 +66,9 @@ func (t *tunnel) SetUDPEnabled(isUDPEnabled bool) {
 	t.registerConnectionHandlers()
 }
 
-func (t *tunnel) Disconnect() {
-	if !t.isConnected {
-		return
-	}
-	t.isConnected = false
-	t.tunWriter.Close()
-	t.lwipStack.Close()
-}
-
-func (t *tunnel) Write(data []byte) (int, error) {
-	if !t.isConnected {
-		return 0, errors.New("Failed to write, network stack closed")
-	}
-	return t.lwipStack.Write(data)
-}
-
 // Registers UDP and TCP SOCKS connection handlers to the tunnel's host and port.
 // Registers a DNS/TCP fallback UDP handler when UDP is disabled.
-func (t *tunnel) registerConnectionHandlers() {
+func (t *outlinetunnel) registerConnectionHandlers() {
 	var udpHandler core.UDPConnHandler
 	if t.isUDPEnabled {
 		udpHandler = socks.NewUDPHandler(
