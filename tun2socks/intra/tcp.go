@@ -38,20 +38,17 @@ func NewTCPHandler(fakedns, truedns net.Addr) core.TCPConnHandler {
 }
 
 func (h *tcpHandler) handleUpload(local net.Conn, remote *net.TCPConn) {
-	// TODO: Handle half-closed sockets more correctly.
-	defer func() {
-		local.Close()
-		remote.CloseWrite()
-	}()
+	// TODO: Handle half-closed sockets more correctly if upstream
+	// changes `local` to a more detailed type than `net.Conn`.
 	io.Copy(remote, local)
+	local.Close()
+	remote.CloseWrite()
 }
 
 func (h *tcpHandler) handleDownload(local net.Conn, remote *net.TCPConn) {
-	defer func() {
-		local.Close()
-		remote.CloseRead()
-	}()
 	io.Copy(local, remote)
+	local.Close()
+	remote.CloseRead()
 }
 
 // TODO: Request upstream to make `conn` a `core.TCPConn` so we can have finer-
