@@ -17,12 +17,12 @@ package tun2socks
 import (
 	"errors"
 
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tun2socks"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 )
 
 // OutlineTunnel embeds the tun2socks.OutlineTunnel interface so it gets exported by gobind.
 type OutlineTunnel interface {
-	tun2socks.OutlineTunnel
+	tunnel.OutlineTunnel
 }
 
 // ConnectSocksTunnel reads packets from a TUN device and routes it to a SOCKS server. Returns an
@@ -44,7 +44,7 @@ func ConnectSocksTunnel(fd int, host string, port int, isUDPEnabled bool) (Outli
 	if err != nil {
 		return nil, err
 	}
-	tunnel, err := tun2socks.NewTunnel(host, uint16(port), isUDPEnabled, tun)
+	tunnel, err := tunnel.NewTunnel(host, uint16(port), isUDPEnabled, tun)
 	if err != nil {
 		return nil, err
 	}

@@ -19,7 +19,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tun2socks"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 )
 
 const vpnMtu = 1500
@@ -35,7 +35,7 @@ func makeTunFile(fd int) (*os.File, error) {
 	return file, nil
 }
 
-func processInputPackets(tunnel tun2socks.Tunnel, tun *os.File) {
+func processInputPackets(tunnel tunnel.Tunnel, tun *os.File) {
 	buffer := make([]byte, vpnMtu)
 	for tunnel.IsConnected() {
 		len, err := tun.Read(buffer)

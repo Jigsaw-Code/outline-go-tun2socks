@@ -20,12 +20,12 @@ import (
 	"runtime/debug"
 	"time"
 
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tun2socks"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 )
 
 // AppleTunnel embeds the tun2socks.Tunnel interface so it gets exported by gobind.
 type AppleTunnel interface {
-	tun2socks.Tunnel
+	tunnel.OutlineTunnel
 }
 
 // TunWriter is an interface that allows for outputting packets to the TUN (VPN).
@@ -58,5 +58,5 @@ func ConnectSocksTunnel(tunWriter TunWriter, host string, port int, isUDPEnabled
 	if tunWriter == nil || host == "" || port <= 0 || port > 65535 {
 		return nil, errors.New("Must provide a TunWriter, a valid SOCKS proxy host and port")
 	}
-	return tun2socks.NewTunnel(host, uint16(port), isUDPEnabled, tunWriter)
+	return tunnel.NewTunnel(host, uint16(port), isUDPEnabled, tunWriter)
 }
