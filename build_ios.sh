@@ -14,6 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+readonly BUILD_DIR=build/ios
 readonly TUN2SOCKS_FRAMEWORK=Tun2socks.framework
 
 rm -rf $BUILD_DIR
