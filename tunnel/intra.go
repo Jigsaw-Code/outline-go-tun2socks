@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package tun2socks
+package tunnel
 
 import (
 	"errors"
@@ -20,15 +20,21 @@ import (
 	"net"
 	"time"
 
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tun2socks/intra"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra"
 	"github.com/eycorsican/go-tun2socks/core"
 )
 
+type IntraListener interface {
+	intra.UDPListener
+	intra.TCPListener
+}
+
 type intratunnel struct {
 	*tunnel
-	fakedns net.Addr
-	udpdns  net.Addr
-	tcpdns  net.Addr
+	fakedns  net.Addr
+	udpdns   net.Addr
+	tcpdns   net.Addr
+	listener IntraListener
 }
 
 // NewIntraTunnel creates a connected Intra session.
@@ -37,7 +43,7 @@ type intratunnel struct {
 //    This will normally be a reserved or remote IP address, port 53.
 // `udpdns` and `tcpdns` are the actual location of the DNS server in use.
 //    These will normally be localhost with a high-numbered port.
-func NewIntraTunnel(fakedns, udpdns, tcpdns string, tunWriter io.WriteCloser) (Tunnel, error) {
+func NewIntraTunnel(fakedns, udpdns, tcpdns string, tunWriter io.WriteCloser, listener IntraListener) (Tunnel, error) {
 	fakednsipaddr, err := net.ResolveUDPAddr("udp", fakedns)
 	if err != nil {
 		return nil, err
@@ -55,7 +61,7 @@ func NewIntraTunnel(fakedns, udpdns, tcpdns string, tunWriter io.WriteCloser) (T
 	}
 	core.RegisterOutputFn(tunWriter.Write)
 	base := &tunnel{tunWriter, core.NewLWIPStack(), true}
-	s := &intratunnel{tunnel: base, fakedns: fakednsipaddr, udpdns: udpdnsipaddr, tcpdns: tcpdnsipaddr}
+	s := &intratunnel{tunnel: base, fakedns: fakednsipaddr, udpdns: udpdnsipaddr, tcpdns: tcpdnsipaddr, listener: listener}
 	s.registerConnectionHandlers()
 	return s, nil
 }
@@ -65,6 +71,6 @@ func (t *intratunnel) registerConnectionHandlers() {
 	// RFC 5382 REQ-5 requires a timeout no shorter than 2 hours and 4 minutes.
 	timeout, _ := time.ParseDuration("2h4m")
 
-	core.RegisterUDPConnHandler(intra.NewUDPHandler(t.fakedns, t.udpdns, timeout))
-	core.RegisterTCPConnHandler(intra.NewTCPHandler(t.fakedns, t.tcpdns))
+	core.RegisterUDPConnHandler(intra.NewUDPHandler(t.fakedns, t.udpdns, timeout, t.listener))
+	core.RegisterTCPConnHandler(intra.NewTCPHandler(t.fakedns, t.tcpdns, t.listener))
 }

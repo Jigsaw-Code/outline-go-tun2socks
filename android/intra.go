@@ -15,13 +15,13 @@
 package tun2socks
 
 import (
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tun2socks"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 )
 
 // IntraTunnel embeds the tun2socks.Tunnel interface so it gets exported by gobind.
 // Intra does not need any methods beyond the basic Tunnel interface.
 type IntraTunnel interface {
-	tun2socks.Tunnel
+	tunnel.Tunnel
 }
 
 // ConnectIntraTunnel reads packets from a TUN device and applies the Intra routing
@@ -35,12 +35,12 @@ type IntraTunnel interface {
 //
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string) (IntraTunnel, error) {
+func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, listener tunnel.IntraListener) (IntraTunnel, error) {
 	tun, err := makeTunFile(fd)
 	if err != nil {
 		return nil, err
 	}
-	tunnel, err := tun2socks.NewIntraTunnel(fakedns, udpdns, tcpdns, tun)
+	tunnel, err := tunnel.NewIntraTunnel(fakedns, udpdns, tcpdns, tun, listener)
 	if err != nil {
 		return nil, err
 	}

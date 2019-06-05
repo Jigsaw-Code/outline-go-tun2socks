@@ -19,36 +19,81 @@ package intra
 import (
 	"io"
 	"net"
+	"time"
 
 	"github.com/eycorsican/go-tun2socks/common/log"
 	"github.com/eycorsican/go-tun2socks/core"
 )
 
 type tcpHandler struct {
-	fakedns net.Addr
-	truedns net.Addr
+	fakedns  net.Addr
+	truedns  net.Addr
+	listener TCPListener
+}
+
+// Usage summary for each TCP socket, reported when it is closed.
+type TCPSocketSummary struct {
+	DownloadBytes   int64 // Total bytes downloaded.
+	UploadBytes     int64 // Total bytes uploaded.
+	Duration   int32 // Duration in seconds.
+	ServerPort int16 // The server port.  All values except 80, 443, and 0 are set to -1.
+	Synack     int32 // TCP handshake latency (ms)
+}
+
+type TCPListener interface {
+	OnTCPSocketClosed(*TCPSocketSummary)
 }
 
 // NewTCPHandler returns a TCP forwarder with Intra-style behavior.
 // Currently this class only redirects DNS traffic to a
 // specified server.  (This should be rare for TCP.)
 // All other traffic is forwarded unmodified.
-func NewTCPHandler(fakedns, truedns net.Addr) core.TCPConnHandler {
-	return &tcpHandler{fakedns: fakedns, truedns: truedns}
+func NewTCPHandler(fakedns, truedns net.Addr, listener TCPListener) core.TCPConnHandler {
+	return &tcpHandler{fakedns: fakedns, truedns: truedns, listener: listener}
 }
 
-func (h *tcpHandler) handleUpload(local net.Conn, remote *net.TCPConn) {
+func (h *tcpHandler) handleUpload(local net.Conn, remote *net.TCPConn, upload chan int64) {
 	// TODO: Handle half-closed sockets more correctly if upstream
 	// changes `local` to a more detailed type than `net.Conn`.
-	io.Copy(remote, local)
+	bytes, _ := io.Copy(remote, local)
 	local.Close()
 	remote.CloseWrite()
+	upload <- bytes
 }
 
-func (h *tcpHandler) handleDownload(local net.Conn, remote *net.TCPConn) {
-	io.Copy(local, remote)
+func (h *tcpHandler) handleDownload(local net.Conn, remote *net.TCPConn) (bytes int64, err error) {
+	bytes, err = io.Copy(local, remote)
 	local.Close()
 	remote.CloseRead()
+	return
+}
+
+func (h *tcpHandler) forward(local net.Conn, remote *net.TCPConn, summary TCPSocketSummary) {
+	upload := make(chan int64)
+	start := time.Now()
+	go h.handleUpload(local, remote, upload)
+	download, _ := h.handleDownload(local, remote)
+	summary.DownloadBytes = download
+	summary.UploadBytes = <-upload
+	summary.Duration = int32(time.Since(start).Seconds())
+	h.listener.OnTCPSocketClosed(&summary)
+}
+
+func filteredPort(addr net.Addr) int16 {
+	_, port, err := net.SplitHostPort(addr.String())
+	if err != nil {
+		return -1
+	}
+	if port == "80" {
+		return 80
+	}
+	if port == "443" {
+		return 443
+	}
+	if port == "0" {
+		return 0
+	}
+	return -1
 }
 
 // TODO: Request upstream to make `conn` a `core.TCPConn` so we can have finer-
@@ -64,12 +109,15 @@ func (h *tcpHandler) Handle(conn net.Conn, target net.Addr) error {
 	if err != nil {
 		return err
 	}
+	var summary TCPSocketSummary
+	summary.ServerPort = filteredPort(target)
+	start := time.Now()
 	c, err := net.DialTCP(target.Network(), nil, tcpaddr)
 	if err != nil {
 		return err
 	}
-	go h.handleUpload(conn, c)
-	go h.handleDownload(conn, c)
+	summary.Synack = int32(time.Since(start).Seconds() * 1000)
+	go h.forward(conn, c, summary)
 	log.Infof("new proxy connection for target: %s:%s", target.Network(), target.String())
 	return nil
 }

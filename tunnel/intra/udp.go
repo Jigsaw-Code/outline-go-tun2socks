@@ -27,16 +27,29 @@ import (
 	"github.com/eycorsican/go-tun2socks/core"
 )
 
+// Summary of a non-DNS UDP association, reported when it is discarded.
+type UDPSocketSummary struct {
+	UploadBytes   int64 // Amount uploaded (bytes)
+	DownloadBytes int64 // Amount downloaded (bytes)
+	Duration int32 // How long the socket was open (seconds)
+}
+
+type UDPListener interface {
+	OnUDPSocketClosed(*UDPSocketSummary)
+}
+
 type tracker struct {
-	conn *net.UDPConn
+	conn     *net.UDPConn
+	start    time.Time
+	upload   int64 // bytes
+	download int64 // bytes
 	// Parameters used to implement the single-query socket optimization:
-	fresh   bool   // True if the socket has not yet been used.
 	complex bool   // True if the socket is not a oneshot DNS query.
 	queryid uint16 // The DNS query ID for this socket, if there is one.
 }
 
 func makeTracker(conn *net.UDPConn) *tracker {
-	return &tracker{conn, true, false, 0}
+	return &tracker{conn, time.Now(), 0, 0, false, 0}
 }
 
 type udpHandler struct {
@@ -46,6 +59,7 @@ type udpHandler struct {
 	udpConns map[core.UDPConn]*tracker
 	fakedns  net.Addr
 	truedns  net.Addr
+	listener UDPListener
 }
 
 // NewUDPHandler makes a UDP handler with Intra-style DNS redirection:
@@ -53,12 +67,13 @@ type udpHandler struct {
 // destination is `fakedns`.  Those packets are redirected to `truedns`.
 // Similarly, packets arriving from `truedns` have the source address replaced
 // with `fakedns`.
-func NewUDPHandler(fakedns, truedns net.Addr, timeout time.Duration) core.UDPConnHandler {
+func NewUDPHandler(fakedns, truedns net.Addr, timeout time.Duration, listener UDPListener) core.UDPConnHandler {
 	return &udpHandler{
 		timeout:  timeout,
 		udpConns: make(map[core.UDPConn]*tracker, 8),
 		fakedns:  fakedns,
 		truedns:  truedns,
+		listener: listener,
 	}
 }
 
@@ -88,6 +103,7 @@ func (h *udpHandler) fetchUDPInput(conn core.UDPConn, t *tracker) {
 			// Pretend that the reply was from the fake DNS server.
 			addr = h.fakedns
 			if n < 2 {
+				// Very short packet, cannot possibly be DNS.
 				t.complex = true
 			} else {
 				responseid := queryid(buf)
@@ -100,6 +116,7 @@ func (h *udpHandler) fetchUDPInput(conn core.UDPConn, t *tracker) {
 			// This socket has been used for non-DNS traffic.
 			t.complex = true
 		}
+		t.download += int64(n)
 		_, err = conn.WriteFrom(buf[:n], addr)
 		if err != nil {
 			log.Warnf("failed to write UDP data to TUN")
@@ -132,7 +149,7 @@ func (h *udpHandler) Connect(conn core.UDPConn, target net.Addr) error {
 // TODO: Request upstream to make `addr` a `UDPAddr` for more efficient comparisons.
 func (h *udpHandler) DidReceiveTo(conn core.UDPConn, data []byte, addr net.Addr) error {
 	h.Lock()
-	tracker, ok1 := h.udpConns[conn]
+	t, ok1 := h.udpConns[conn]
 	h.Unlock()
 
 	if !ok1 {
@@ -144,17 +161,17 @@ func (h *udpHandler) DidReceiveTo(conn core.UDPConn, data []byte, addr net.Addr)
 		addr = h.truedns
 		id := queryid(data)
 		if id < 0 {
-			tracker.complex = true
-		} else if tracker.fresh {
-			tracker.queryid = uint16(id)
-		} else if tracker.queryid != uint16(id) {
-			tracker.complex = true
+			t.complex = true
+		} else if t.upload == 0 {
+			t.queryid = uint16(id)
+		} else if t.queryid != uint16(id) {
+			t.complex = true
 		}
 	} else {
-		tracker.complex = true
+		t.complex = true
 	}
-	tracker.fresh = false
-	_, err := tracker.conn.WriteTo(data, addr)
+	t.upload += int64(len(data))
+	_, err := t.conn.WriteTo(data, addr)
 	if err != nil {
 		log.Warnf("failed to forward UDP payload")
 		return errors.New("failed to write UDP data")
@@ -170,6 +187,8 @@ func (h *udpHandler) Close(conn core.UDPConn) {
 
 	if t, ok := h.udpConns[conn]; ok {
 		t.conn.Close()
+		duration := int32(time.Since(t.start).Seconds())
+		h.listener.OnUDPSocketClosed(&UDPSocketSummary{t.upload, t.download, duration})
 		delete(h.udpConns, conn)
 	}
 }
