@@ -33,8 +33,8 @@ type tcpHandler struct {
 
 // Usage summary for each TCP socket, reported when it is closed.
 type TCPSocketSummary struct {
-	Download   int64 // Total bytes downloaded.
-	Upload     int64 // Total bytes uploaded.
+	DownloadBytes   int64 // Total bytes downloaded.
+	UploadBytes     int64 // Total bytes uploaded.
 	Duration   int32 // Duration in seconds.
 	ServerPort int16 // The server port.  All values except 80, 443, and 0 are set to -1.
 	Synack     int32 // TCP handshake latency (ms)
@@ -73,8 +73,8 @@ func (h *tcpHandler) forward(local net.Conn, remote *net.TCPConn, summary TCPSoc
 	start := time.Now()
 	go h.handleUpload(local, remote, upload)
 	download, _ := h.handleDownload(local, remote)
-	summary.Download = download
-	summary.Upload = <-upload
+	summary.DownloadBytes = download
+	summary.UploadBytes = <-upload
 	summary.Duration = int32(time.Since(start).Seconds())
 	h.listener.OnTCPSocketClosed(&summary)
 }

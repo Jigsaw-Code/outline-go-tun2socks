@@ -29,8 +29,8 @@ import (
 
 // Summary of a non-DNS UDP association, reported when it is discarded.
 type UDPSocketSummary struct {
-	Upload   int64 // Amount uploaded (bytes)
-	Download int64 // Amount downloaded (bytes)
+	UploadBytes   int64 // Amount uploaded (bytes)
+	DownloadBytes int64 // Amount downloaded (bytes)
 	Duration int32 // How long the socket was open (seconds)
 }
 
