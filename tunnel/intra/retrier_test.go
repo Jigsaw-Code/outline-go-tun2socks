@@ -9,10 +9,10 @@ import (
 )
 
 type setup struct {
-	t *testing.T
-	server *net.TCPListener
-	clientSide DuplexConn
-	serverSide *net.TCPConn
+	t              *testing.T
+	server         *net.TCPListener
+	clientSide     DuplexConn
+	serverSide     *net.TCPConn
 	serverReceived []byte
 }
 
@@ -46,7 +46,7 @@ func makeBuffer() []byte {
 	for i := 0; i < 256; i++ {
 		buffer[i] = byte(i)
 	}
-	return buffer	
+	return buffer
 }
 
 func send(src io.Writer, dest io.Reader, t *testing.T) []byte {
@@ -73,12 +73,12 @@ func send(src io.Writer, dest io.Reader, t *testing.T) []byte {
 	return buf
 }
 
-func (s *setup) up() {
+func (s *setup) sendUp() {
 	buf := send(s.clientSide, s.serverSide, s.t)
 	s.serverReceived = append(s.serverReceived, buf...)
 }
 
-func (s *setup) down() {
+func (s *setup) sendDown() {
 	send(s.serverSide, s.clientSide, s.t)
 }
 
@@ -160,8 +160,8 @@ func (s *setup) confirmRetry() {
 
 func TestNormalConnection(t *testing.T) {
 	s := makeSetup(t)
-	s.up()
-	s.down()
+	s.sendUp()
+	s.sendDown()
 	s.closeReadUp()
 	s.closeWriteUp()
 	s.close()
@@ -169,10 +169,10 @@ func TestNormalConnection(t *testing.T) {
 
 func TestFinRetry(t *testing.T) {
 	s := makeSetup(t)
-	s.up()
+	s.sendUp()
 	s.serverSide.Close()
 	s.confirmRetry()
-	s.down()
+	s.sendDown()
 	s.closeReadUp()
 	s.closeWriteUp()
 	s.close()
@@ -180,18 +180,31 @@ func TestFinRetry(t *testing.T) {
 
 func TestTimeoutRetry(t *testing.T) {
 	s := makeSetup(t)
-	s.up()
+	s.sendUp()
 	// Client should time out and retry after about 1.2 seconds
 	time.Sleep(2 * time.Second)
 	s.confirmRetry()
-	s.down()
+	s.sendDown()
 	s.closeReadUp()
 	s.closeWriteUp()
 	s.close()
 }
+
+func TestTwoWriteRetry(t *testing.T) {
+	s := makeSetup(t)
+	s.sendUp()
+	s.sendUp()
+	s.serverSide.Close()
+	s.confirmRetry()
+	s.sendDown()
+	s.closeReadUp()
+	s.closeWriteUp()
+	s.close()
+}
+
 func TestFailedRetry(t *testing.T) {
 	s := makeSetup(t)
-	s.up()
+	s.sendUp()
 	s.serverSide.Close()
 	s.confirmRetry()
 	s.closeReadDown()
@@ -201,18 +214,18 @@ func TestFailedRetry(t *testing.T) {
 
 func TestSequentialClose(t *testing.T) {
 	s := makeSetup(t)
-	s.up()
+	s.sendUp()
 	s.closeWriteUp()
-	s.down()
+	s.sendDown()
 	s.closeWriteDown()
 	s.close()
 }
 
 func TestBackwardsUse(t *testing.T) {
 	s := makeSetup(t)
-	s.down()
+	s.sendDown()
 	s.closeWriteDown()
-	s.up()
+	s.sendUp()
 	s.closeWriteUp()
 	s.close()
 }

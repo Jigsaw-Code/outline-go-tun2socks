@@ -72,7 +72,7 @@ func timeout(before, after time.Time) time.Duration {
 	// False positives trigger an unnecessary retry, which can make connections slower, so they are
 	// worth avoiding.  However, overly long timeouts make retry slower and less useful.
 	rtt := after.Sub(before)
-	return 1200 * time.Millisecond + 2*rtt
+	return 1200*time.Millisecond + 2*rtt
 }
 
 // DialWithSplitRetry returns a TCP connection that transparently retries by
@@ -173,43 +173,41 @@ func splitHello(hello []byte) ([]byte, []byte) {
 }
 
 // Write-related functions
-func (r *retrier) Write(b []byte) (n int, err error) {
-	var conn *net.TCPConn
+func (r *retrier) Write(b []byte) (int, error) {
 	// Double-checked locking pattern.  This avoids lock acquisition on
 	// every packet after retry completes, while also ensuring that r.hello is
 	// empty at steady-state.
 	if !r.retryCompleted() {
+		n := 0
+		var err error
+		attempted := false
 		r.mutex.Lock()
 		if !r.retryCompleted() {
-			conn = r.conn
-			n, err = conn.Write(b)
+			n, err = r.conn.Write(b)
+			attempted = true
 			r.hello = append(r.hello, b[:n]...)
 
 			// We require a response or another write within the specified timeout.
-			conn.SetReadDeadline(time.Now().Add(r.timeout))
+			r.conn.SetReadDeadline(time.Now().Add(r.timeout))
 		}
 		r.mutex.Unlock()
+		if attempted {
+			if err == nil {
+				return n, nil
+			}
+			// A write error occurred on the provisional socket.  This should be handled
+			// by the retry procedure.  Block until we have a final socket (which will
+			// already have replayed b[:n]), and retry.
+			<-r.retryCompleteFlag
+			r.mutex.Lock()
+			r.mutex.Unlock()
+			m, err := r.conn.Write(b[n:])
+			return n + m, err
+		}
 	}
 
-	if err != nil {
-		// A write error occurred on the provisional socket.  This should be handled
-		// by the retry procedure.  Block until we have a final socket (which will
-		// already have replayed b[:n]), and retry.
-		<-r.retryCompleteFlag
-		r.mutex.Lock()
-		conn = r.conn
-		r.mutex.Unlock()
-		var m int
-		m, err = conn.Write(b[n:])
-		n += m
-	}
-
-
-	if conn == nil {
-		// retryCompleted() is true, so r.conn is final and doesn't need locking.
-		n, err = r.conn.Write(b)
-	}
-	return
+	// retryCompleted() is true, so r.conn is final and doesn't need locking.
+	return r.conn.Write(b)
 }
 
 func (r *retrier) ReadFrom(reader io.Reader) (bytes int64, err error) {
