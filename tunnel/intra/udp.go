@@ -31,7 +31,7 @@ import (
 type UDPSocketSummary struct {
 	UploadBytes   int64 // Amount uploaded (bytes)
 	DownloadBytes int64 // Amount downloaded (bytes)
-	Duration int32 // How long the socket was open (seconds)
+	Duration      int32 // How long the socket was open (seconds)
 }
 
 type UDPListener interface {

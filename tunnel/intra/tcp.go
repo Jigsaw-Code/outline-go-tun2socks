@@ -33,15 +33,22 @@ type tcpHandler struct {
 
 // Usage summary for each TCP socket, reported when it is closed.
 type TCPSocketSummary struct {
-	DownloadBytes   int64 // Total bytes downloaded.
-	UploadBytes     int64 // Total bytes uploaded.
-	Duration   int32 // Duration in seconds.
-	ServerPort int16 // The server port.  All values except 80, 443, and 0 are set to -1.
-	Synack     int32 // TCP handshake latency (ms)
+	DownloadBytes int64 // Total bytes downloaded.
+	UploadBytes   int64 // Total bytes uploaded.
+	Duration      int32 // Duration in seconds.
+	ServerPort    int16 // The server port.  All values except 80, 443, and 0 are set to -1.
+	Synack        int32 // TCP handshake latency (ms)
 }
 
 type TCPListener interface {
 	OnTCPSocketClosed(*TCPSocketSummary)
+}
+
+type DuplexConn interface {
+	io.ReadWriter
+	io.ReaderFrom
+	CloseWrite() error
+	CloseRead() error
 }
 
 // NewTCPHandler returns a TCP forwarder with Intra-style behavior.
@@ -52,23 +59,23 @@ func NewTCPHandler(fakedns, truedns net.Addr, listener TCPListener) core.TCPConn
 	return &tcpHandler{fakedns: fakedns, truedns: truedns, listener: listener}
 }
 
-func (h *tcpHandler) handleUpload(local net.Conn, remote *net.TCPConn, upload chan int64) {
+func (h *tcpHandler) handleUpload(local net.Conn, remote DuplexConn, upload chan int64) {
 	// TODO: Handle half-closed sockets more correctly if upstream
 	// changes `local` to a more detailed type than `net.Conn`.
-	bytes, _ := io.Copy(remote, local)
+	bytes, _ := remote.ReadFrom(local)
 	local.Close()
 	remote.CloseWrite()
 	upload <- bytes
 }
 
-func (h *tcpHandler) handleDownload(local net.Conn, remote *net.TCPConn) (bytes int64, err error) {
+func (h *tcpHandler) handleDownload(local net.Conn, remote DuplexConn) (bytes int64, err error) {
 	bytes, err = io.Copy(local, remote)
 	local.Close()
 	remote.CloseRead()
 	return
 }
 
-func (h *tcpHandler) forward(local net.Conn, remote *net.TCPConn, summary TCPSocketSummary) {
+func (h *tcpHandler) forward(local net.Conn, remote DuplexConn, summary TCPSocketSummary) {
 	upload := make(chan int64)
 	start := time.Now()
 	go h.handleUpload(local, remote, upload)
@@ -112,7 +119,12 @@ func (h *tcpHandler) Handle(conn net.Conn, target net.Addr) error {
 	var summary TCPSocketSummary
 	summary.ServerPort = filteredPort(target)
 	start := time.Now()
-	c, err := net.DialTCP(target.Network(), nil, tcpaddr)
+	var c DuplexConn
+	if summary.ServerPort == 443 {
+		c, err = DialWithSplitRetry(target.Network(), tcpaddr)
+	} else {
+		c, err = net.DialTCP(target.Network(), nil, tcpaddr)
+	}
 	if err != nil {
 		return err
 	}
