@@ -14,6 +14,7 @@ type setup struct {
 	clientSide     DuplexConn
 	serverSide     *net.TCPConn
 	serverReceived []byte
+	summary        *TCPSocketSummary
 }
 
 func makeSetup(t *testing.T) *setup {
@@ -30,7 +31,8 @@ func makeSetup(t *testing.T) *setup {
 	if !ok {
 		t.Error("Server isn't TCP?")
 	}
-	clientSide, err := DialWithSplitRetry("tcp", serverAddr)
+	var summary TCPSocketSummary
+	clientSide, err := DialWithSplitRetry("tcp", serverAddr, &summary)
 	if err != nil {
 		t.Error(err)
 	}
@@ -38,12 +40,14 @@ func makeSetup(t *testing.T) *setup {
 	if err != nil {
 		t.Error(err)
 	}
-	return &setup{t, server, clientSide, serverSide, nil}
+	return &setup{t, server, clientSide, serverSide, nil, &summary}
 }
 
+const BUFSIZE = 256
+
 func makeBuffer() []byte {
-	buffer := make([]byte, 256)
-	for i := 0; i < 256; i++ {
+	buffer := make([]byte, BUFSIZE)
+	for i := 0; i < BUFSIZE; i++ {
 		buffer[i] = byte(i)
 	}
 	return buffer
@@ -158,6 +162,32 @@ func (s *setup) confirmRetry() {
 	<-done
 }
 
+func (s *setup) checkNoStats() {
+	if s.summary.Retry != nil {
+		s.t.Error("Retry stats should be nil")
+	}
+}
+
+func (s *setup) checkStats(bytes int32, chunks int16, timeout bool) {
+	r := s.summary.Retry
+	if r == nil {
+		s.t.Error("Missing stats")
+		return
+	}
+	if r.Bytes != bytes {
+		s.t.Errorf("Expected %d bytes, got %d", bytes, r.Bytes)
+	}
+	if r.Chunks != chunks {
+		s.t.Errorf("Expected %d chunks, got %d", chunks, r.Chunks)
+	}
+	if r.Timeout != timeout {
+		s.t.Errorf("Expected timeout to be %t", timeout)
+	}
+	if r.Split < 32 || r.Split > 64 {
+		s.t.Errorf("Unexpected split: %d", r.Split)
+	}
+}
+
 func TestNormalConnection(t *testing.T) {
 	s := makeSetup(t)
 	s.sendUp()
@@ -165,6 +195,7 @@ func TestNormalConnection(t *testing.T) {
 	s.closeReadUp()
 	s.closeWriteUp()
 	s.close()
+	s.checkNoStats()
 }
 
 func TestFinRetry(t *testing.T) {
@@ -176,6 +207,7 @@ func TestFinRetry(t *testing.T) {
 	s.closeReadUp()
 	s.closeWriteUp()
 	s.close()
+	s.checkStats(BUFSIZE, 1, false)
 }
 
 func TestTimeoutRetry(t *testing.T) {
@@ -188,6 +220,7 @@ func TestTimeoutRetry(t *testing.T) {
 	s.closeReadUp()
 	s.closeWriteUp()
 	s.close()
+	s.checkStats(BUFSIZE, 1, true)
 }
 
 func TestTwoWriteRetry(t *testing.T) {
@@ -200,6 +233,7 @@ func TestTwoWriteRetry(t *testing.T) {
 	s.closeReadUp()
 	s.closeWriteUp()
 	s.close()
+	s.checkStats(2*BUFSIZE, 2, false)
 }
 
 func TestFailedRetry(t *testing.T) {
@@ -210,6 +244,7 @@ func TestFailedRetry(t *testing.T) {
 	s.closeReadDown()
 	s.closeWriteDown()
 	s.close()
+	s.checkStats(BUFSIZE, 1, false)
 }
 
 func TestSequentialClose(t *testing.T) {
@@ -219,6 +254,7 @@ func TestSequentialClose(t *testing.T) {
 	s.sendDown()
 	s.closeWriteDown()
 	s.close()
+	s.checkNoStats()
 }
 
 func TestBackwardsUse(t *testing.T) {
@@ -228,4 +264,5 @@ func TestBackwardsUse(t *testing.T) {
 	s.sendUp()
 	s.closeWriteUp()
 	s.close()
+	s.checkNoStats()
 }
