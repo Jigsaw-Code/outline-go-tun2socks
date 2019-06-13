@@ -15,6 +15,16 @@
 # limitations under the License.
 
 readonly BUILD_DIR=build/android
+readonly LOG_FILE=$(mktemp)
 
 rm -rf $BUILD_DIR
-make clean && make android
+make clean && make android 2>&1 | tee $LOG_FILE
+
+# Parse the Go working directory to copy the unstripped JNI binaries so symbols can be uploaded
+# to crash reporting tools.
+readonly GO_WORK_DIR=$(cat $LOG_FILE | grep "WORK=" | cut -f2 -d=)
+if [ ! -z $GO_WORK_DIR ]; then
+  echo "Copying JNI binaries from: $GO_WORK_DIR"
+  readonly JNI_DIR=$BUILD_DIR/jni
+  mkdir -p $JNI_DIR && cp -R $GO_WORK_DIR/android/src/main/jniLibs/ $JNI_DIR/
+fi
