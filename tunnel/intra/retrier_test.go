@@ -247,6 +247,21 @@ func TestFailedRetry(t *testing.T) {
 	s.checkStats(BUFSIZE, 1, false)
 }
 
+func TestDisappearingServer(t *testing.T) {
+	s := makeSetup(t)
+	s.sendUp()
+	s.close()
+	s.serverSide.Close()
+	// Try to read 1 byte to trigger the retry.
+	n, err := s.clientSide.Read(make([]byte, 1))
+	if n > 0 || err == nil {
+		t.Error("Expected read to fail")
+	}
+	s.clientSide.CloseRead()
+	s.clientSide.CloseWrite()
+	s.checkNoStats()
+}
+
 func TestSequentialClose(t *testing.T) {
 	s := makeSetup(t)
 	s.sendUp()
