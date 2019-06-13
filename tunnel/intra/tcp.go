@@ -33,11 +33,12 @@ type tcpHandler struct {
 
 // Usage summary for each TCP socket, reported when it is closed.
 type TCPSocketSummary struct {
-	DownloadBytes int64 // Total bytes downloaded.
-	UploadBytes   int64 // Total bytes uploaded.
-	Duration      int32 // Duration in seconds.
-	ServerPort    int16 // The server port.  All values except 80, 443, and 0 are set to -1.
-	Synack        int32 // TCP handshake latency (ms)
+	DownloadBytes int64       // Total bytes downloaded.
+	UploadBytes   int64       // Total bytes uploaded.
+	Duration      int32       // Duration in seconds.
+	ServerPort    int16       // The server port.  All values except 80, 443, and 0 are set to -1.
+	Synack        int32       // TCP handshake latency (ms)
+	Retry         *RetryStats // Non-nil if a retry occurred.
 }
 
 type TCPListener interface {
@@ -75,7 +76,7 @@ func (h *tcpHandler) handleDownload(local net.Conn, remote DuplexConn) (bytes in
 	return
 }
 
-func (h *tcpHandler) forward(local net.Conn, remote DuplexConn, summary TCPSocketSummary) {
+func (h *tcpHandler) forward(local net.Conn, remote DuplexConn, summary *TCPSocketSummary) {
 	upload := make(chan int64)
 	start := time.Now()
 	go h.handleUpload(local, remote, upload)
@@ -83,7 +84,7 @@ func (h *tcpHandler) forward(local net.Conn, remote DuplexConn, summary TCPSocke
 	summary.DownloadBytes = download
 	summary.UploadBytes = <-upload
 	summary.Duration = int32(time.Since(start).Seconds())
-	h.listener.OnTCPSocketClosed(&summary)
+	h.listener.OnTCPSocketClosed(summary)
 }
 
 func filteredPort(addr net.Addr) int16 {
@@ -121,7 +122,7 @@ func (h *tcpHandler) Handle(conn net.Conn, target net.Addr) error {
 	start := time.Now()
 	var c DuplexConn
 	if summary.ServerPort == 443 {
-		c, err = DialWithSplitRetry(target.Network(), tcpaddr)
+		c, err = DialWithSplitRetry(target.Network(), tcpaddr, &summary)
 	} else {
 		c, err = net.DialTCP(target.Network(), nil, tcpaddr)
 	}
@@ -129,7 +130,7 @@ func (h *tcpHandler) Handle(conn net.Conn, target net.Addr) error {
 		return err
 	}
 	summary.Synack = int32(time.Since(start).Seconds() * 1000)
-	go h.forward(conn, c, summary)
+	go h.forward(conn, c, &summary)
 	log.Infof("new proxy connection for target: %s:%s", target.Network(), target.String())
 	return nil
 }

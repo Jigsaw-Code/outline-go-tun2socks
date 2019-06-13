@@ -8,6 +8,13 @@ import (
 	"time"
 )
 
+type RetryStats struct {
+	Bytes   int32 // Number of bytes uploaded before the retry.
+	Chunks  int16 // Number of writes before the retry.
+	Split   int16 // Number of bytes in the first retried segment.
+	Timeout bool  // True if the retry was caused by a timeout.
+}
+
 // retrier implements the DuplexConn interface.
 type retrier struct {
 	// mutex is a lock that guards `conn`, `hello`, and `retryCompleteFlag`.
@@ -31,6 +38,8 @@ type retrier struct {
 	// Flags indicating whether the caller has called CloseRead and CloseWrite.
 	readCloseFlag  chan struct{}
 	writeCloseFlag chan struct{}
+	stats          RetryStats
+	summary        *TCPSocketSummary
 }
 
 // Helper functions for reading flags.
@@ -79,7 +88,7 @@ func timeout(before, after time.Time) time.Duration {
 // splitting the initial upstream segment if the socket closes without receiving a
 // reply.  Like net.Conn, it is intended for two-threaded use, with one thread calling
 // Read and CloseRead, and another calling Write, ReadFrom, and CloseWrite.
-func DialWithSplitRetry(network string, addr *net.TCPAddr) (DuplexConn, error) {
+func DialWithSplitRetry(network string, addr *net.TCPAddr, summary *TCPSocketSummary) (DuplexConn, error) {
 	before := time.Now()
 	conn, err := net.DialTCP(network, nil, addr)
 	if err != nil {
@@ -95,6 +104,7 @@ func DialWithSplitRetry(network string, addr *net.TCPAddr) (DuplexConn, error) {
 		retryCompleteFlag: make(chan struct{}),
 		readCloseFlag:     make(chan struct{}),
 		writeCloseFlag:    make(chan struct{}),
+		summary:           summary,
 	}
 
 	return r, nil
@@ -110,6 +120,9 @@ func (r *retrier) Read(buf []byte) (n int, err error) {
 	if !r.retryCompleted() {
 		r.mutex.Lock()
 		if err != nil {
+			if neterr, ok := err.(net.Error); ok {
+				r.stats.Timeout = neterr.Timeout()
+			}
 			// Read failed.  Retry.
 			n, err = r.retry(buf)
 		}
@@ -126,6 +139,9 @@ func (r *retrier) retry(buf []byte) (n int, err error) {
 		return
 	}
 	first, second := splitHello(r.hello)
+	r.stats.Split = int16(len(first))
+	// Set Retry to a non-nil value, indicating that a retry occurred.
+	r.summary.Retry = &r.stats
 	if _, err = r.conn.Write(first); err != nil {
 		return
 	}
@@ -186,6 +202,8 @@ func (r *retrier) Write(b []byte) (int, error) {
 			n, err = r.conn.Write(b)
 			attempted = true
 			r.hello = append(r.hello, b[:n]...)
+			r.stats.Chunks++
+			r.stats.Bytes = int32(len(r.hello))
 
 			// We require a response or another write within the specified timeout.
 			r.conn.SetReadDeadline(time.Now().Add(r.timeout))
