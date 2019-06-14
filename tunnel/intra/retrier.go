@@ -135,9 +135,11 @@ func (r *retrier) Read(buf []byte) (n int, err error) {
 
 func (r *retrier) retry(buf []byte) (n int, err error) {
 	r.conn.Close()
-	if r.conn, err = net.DialTCP(r.network, nil, r.addr); err != nil {
+	var newConn *net.TCPConn
+	if newConn, err = net.DialTCP(r.network, nil, r.addr); err != nil {
 		return
 	}
+	r.conn = newConn
 	first, second := splitHello(r.hello)
 	r.stats.Split = int16(len(first))
 	// Set Retry to a non-nil value, indicating that a retry occurred.
