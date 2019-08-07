@@ -18,11 +18,17 @@ import (
 	"errors"
 	"log"
 	"os"
+	"runtime/debug"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 )
 
 const vpnMtu = 1500
+
+func init() {
+	// Conserve memory by increasing garbage collection frequency.
+	debug.SetGCPercent(10)
+}
 
 func makeTunFile(fd int) (*os.File, error) {
 	if fd < 0 {
