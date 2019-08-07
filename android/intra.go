@@ -35,12 +35,12 @@ type IntraTunnel interface {
 //
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, listener tunnel.IntraListener) (IntraTunnel, error) {
+func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, alwaysSplitHTTPS bool, listener tunnel.IntraListener) (IntraTunnel, error) {
 	tun, err := makeTunFile(fd)
 	if err != nil {
 		return nil, err
 	}
-	tunnel, err := tunnel.NewIntraTunnel(fakedns, udpdns, tcpdns, tun, listener)
+	tunnel, err := tunnel.NewIntraTunnel(fakedns, udpdns, tcpdns, tun, alwaysSplitHTTPS, listener)
 	if err != nil {
 		return nil, err
 	}
