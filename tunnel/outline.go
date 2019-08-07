@@ -62,7 +62,7 @@ func (t *outlinetunnel) SetUDPEnabled(isUDPEnabled bool) {
 		return
 	}
 	t.isUDPEnabled = isUDPEnabled
-	t.lwipStack.Close() // Close exisiting connections to avoid using the previous handlers.
+	t.lwipStack.Close() // Close existing connections to avoid using the previous handlers.
 	t.registerConnectionHandlers()
 }
 
