@@ -6,13 +6,16 @@ import (
 	"net"
 	"sync"
 	"time"
+
+	"github.com/Jigsaw-Code/getsni"
 )
 
 type RetryStats struct {
-	Bytes   int32 // Number of bytes uploaded before the retry.
-	Chunks  int16 // Number of writes before the retry.
-	Split   int16 // Number of bytes in the first retried segment.
-	Timeout bool  // True if the retry was caused by a timeout.
+	SNI     string // TLS SNI observed, if present.
+	Bytes   int32  // Number of bytes uploaded before the retry.
+	Chunks  int16  // Number of writes before the retry.
+	Split   int16  // Number of bytes in the first retried segment.
+	Timeout bool   // True if the retry was caused by a timeout.
 }
 
 // retrier implements the DuplexConn interface.
@@ -204,8 +207,12 @@ func (r *retrier) Write(b []byte) (int, error) {
 			n, err = r.conn.Write(b)
 			attempted = true
 			r.hello = append(r.hello, b[:n]...)
+
 			r.stats.Chunks++
 			r.stats.Bytes = int32(len(r.hello))
+			if r.stats.SNI == "" {
+				r.stats.SNI, _ = getsni.GetSNI(r.hello)
+			}
 
 			// We require a response or another write within the specified timeout.
 			r.conn.SetReadDeadline(time.Now().Add(r.timeout))
