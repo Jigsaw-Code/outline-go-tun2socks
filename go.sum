@@ -1,4 +1,6 @@
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
+github.com/Jigsaw-Code/getsni v0.0.0-20190807203514-efe2dbf35d1f h1:PT61aMvdZPh/8L5FjmKu8DS4/VnmwSJICVZ/THpmLF0=
+github.com/Jigsaw-Code/getsni v0.0.0-20190807203514-efe2dbf35d1f/go.mod h1:C68VBkZJR/wcvgo6pmdlm6snMHWiLE844lXJ028Qh8Y=
 github.com/eycorsican/go-tun2socks v1.12.0 h1:sW+Bdy3IenYoIh8zDICdNPEQabaS0Uv9BaRMcqIxum8=
 github.com/eycorsican/go-tun2socks v1.12.0/go.mod h1:itJVcg8T4Lc1r+72CNpCV/SUNO8of0z/jFeAt31cQbA=
 github.com/eycorsican/go-tun2socks v1.13.0 h1:t+k1+mt5xvS8iWhmrYKEAiIWArQqSFJUU/B5Ivivjws=
@@ -18,6 +20,7 @@ golang.org/x/crypto v0.0.0-20190313024323-a1f597ede03a h1:YX8ljsm6wXlHZO+aRz9Exq
 golang.org/x/crypto v0.0.0-20190313024323-a1f597ede03a/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
 golang.org/x/crypto v0.0.0-20190325154230-a5d413f7728c h1:Vj5n4GlwjmQteupaxJ9+0FNOmBrHfq7vN4btdGoDZgI=
 golang.org/x/crypto v0.0.0-20190325154230-a5d413f7728c/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=
+golang.org/x/crypto v0.0.0-20190513172903-22d7a77e9e5f h1:R423Cnkcp5JABoeemiGEPlt9tHXFfw5kvc0yqlxRPWo=
 golang.org/x/crypto v0.0.0-20190513172903-22d7a77e9e5f/go.mod h1:yigFU9vqHzYiE8UmvKecakEJjdnWj3jj499lnFckfCI=
 golang.org/x/exp v0.0.0-20190306152737-a1d7652674e8/go.mod h1:CJ0aWSM057203Lf6IL+f9T1iT9GByDxfZKAQTCR3kQA=
 golang.org/x/exp v0.0.0-20190321205749-f0864edee7f3/go.mod h1:ZjyILWgesfNpC6sMxTJOJm9Kp84zZh5NQWvqDGG3Qr8=
