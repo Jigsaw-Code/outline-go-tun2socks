@@ -230,7 +230,8 @@ func (r *retrier) Write(b []byte) (int, error) {
 	return r.conn.Write(b)
 }
 
-func copy(dst io.Writer, src io.Reader) (int64, error) {
+// Copy one buffer from src to dst, using dst.Write.
+func copyOnce(dst io.Writer, src io.Reader) (int64, error) {
 	// This buffer is large enough to hold any ordinary first write
 	// without introducing extra splitting.
 	buf := make([]byte, 2048)
@@ -244,7 +245,7 @@ func copy(dst io.Writer, src io.Reader) (int64, error) {
 
 func (r *retrier) ReadFrom(reader io.Reader) (bytes int64, err error) {
 	for !r.retryCompleted() {
-		if bytes, err = copy(r, reader); err != nil {
+		if bytes, err = copyOnce(r, reader); err != nil {
 			return
 		}
 	}
