@@ -26,9 +26,10 @@ import (
 )
 
 type tcpHandler struct {
-	fakedns  net.Addr
-	truedns  net.Addr
-	listener TCPListener
+	fakedns          net.Addr
+	truedns          net.Addr
+	alwaysSplitHTTPS bool
+	listener         TCPListener
 }
 
 // Usage summary for each TCP socket, reported when it is closed.
@@ -56,8 +57,13 @@ type DuplexConn interface {
 // Currently this class only redirects DNS traffic to a
 // specified server.  (This should be rare for TCP.)
 // All other traffic is forwarded unmodified.
-func NewTCPHandler(fakedns, truedns net.Addr, listener TCPListener) core.TCPConnHandler {
-	return &tcpHandler{fakedns: fakedns, truedns: truedns, listener: listener}
+func NewTCPHandler(fakedns, truedns net.Addr, alwaysSplitHTTPS bool, listener TCPListener) core.TCPConnHandler {
+	return &tcpHandler{
+		fakedns:          fakedns,
+		truedns:          truedns,
+		alwaysSplitHTTPS: alwaysSplitHTTPS,
+		listener:         listener,
+	}
 }
 
 func (h *tcpHandler) handleUpload(local net.Conn, remote DuplexConn, upload chan int64) {
@@ -122,7 +128,11 @@ func (h *tcpHandler) Handle(conn net.Conn, target net.Addr) error {
 	start := time.Now()
 	var c DuplexConn
 	if summary.ServerPort == 443 {
-		c, err = DialWithSplitRetry(target.Network(), tcpaddr, &summary)
+		if h.alwaysSplitHTTPS {
+			c, err = DialWithSplit(target.Network(), tcpaddr)
+		} else {
+			c, err = DialWithSplitRetry(target.Network(), tcpaddr, &summary)
+		}
 	} else {
 		c, err = net.DialTCP(target.Network(), nil, tcpaddr)
 	}

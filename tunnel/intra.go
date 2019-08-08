@@ -31,10 +31,11 @@ type IntraListener interface {
 
 type intratunnel struct {
 	*tunnel
-	fakedns  net.Addr
-	udpdns   net.Addr
-	tcpdns   net.Addr
-	listener IntraListener
+	fakedns          net.Addr
+	udpdns           net.Addr
+	tcpdns           net.Addr
+	alwaysSplitHTTPS bool
+	listener         IntraListener
 }
 
 // NewIntraTunnel creates a connected Intra session.
@@ -43,7 +44,7 @@ type intratunnel struct {
 //    This will normally be a reserved or remote IP address, port 53.
 // `udpdns` and `tcpdns` are the actual location of the DNS server in use.
 //    These will normally be localhost with a high-numbered port.
-func NewIntraTunnel(fakedns, udpdns, tcpdns string, tunWriter io.WriteCloser, listener IntraListener) (Tunnel, error) {
+func NewIntraTunnel(fakedns, udpdns, tcpdns string, tunWriter io.WriteCloser, alwaysSplitHTTPS bool, listener IntraListener) (Tunnel, error) {
 	fakednsipaddr, err := net.ResolveUDPAddr("udp", fakedns)
 	if err != nil {
 		return nil, err
@@ -61,7 +62,14 @@ func NewIntraTunnel(fakedns, udpdns, tcpdns string, tunWriter io.WriteCloser, li
 	}
 	core.RegisterOutputFn(tunWriter.Write)
 	base := &tunnel{tunWriter, core.NewLWIPStack(), true}
-	s := &intratunnel{tunnel: base, fakedns: fakednsipaddr, udpdns: udpdnsipaddr, tcpdns: tcpdnsipaddr, listener: listener}
+	s := &intratunnel{
+		tunnel:           base,
+		fakedns:          fakednsipaddr,
+		udpdns:           udpdnsipaddr,
+		tcpdns:           tcpdnsipaddr,
+		alwaysSplitHTTPS: alwaysSplitHTTPS,
+		listener:         listener,
+	}
 	s.registerConnectionHandlers()
 	return s, nil
 }
@@ -72,5 +80,5 @@ func (t *intratunnel) registerConnectionHandlers() {
 	timeout, _ := time.ParseDuration("2h4m")
 
 	core.RegisterUDPConnHandler(intra.NewUDPHandler(t.fakedns, t.udpdns, timeout, t.listener))
-	core.RegisterTCPConnHandler(intra.NewTCPHandler(t.fakedns, t.tcpdns, t.listener))
+	core.RegisterTCPConnHandler(intra.NewTCPHandler(t.fakedns, t.tcpdns, t.alwaysSplitHTTPS, t.listener))
 }
