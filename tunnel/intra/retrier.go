@@ -130,6 +130,8 @@ func (r *retrier) Read(buf []byte) (n int, err error) {
 			n, err = r.retry(buf)
 		}
 		close(r.retryCompleteFlag)
+		// Unset read deadline.
+		r.conn.SetReadDeadline(time.Time{})
 		r.hello = nil
 		r.mutex.Unlock()
 	}
