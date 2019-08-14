@@ -19,6 +19,8 @@ package intra
 import (
 	"io"
 	"net"
+	"os"
+	"syscall"
 	"time"
 
 	"github.com/eycorsican/go-tun2socks/common/log"
@@ -112,6 +114,34 @@ func filteredPort(addr net.Addr) int16 {
 	return -1
 }
 
+// Normally, if a middlebox encountered a network unreachable
+// condition, it would simply drop the packets, and the client
+// would time out.  However, when Handle() returns an error,
+// go-tun2socks emits a TCP RST packet.  This might confuse some
+// implementations of Happy Eyeballs on IPv4-only networks. The
+// RST packet from the IPv6 destination could be treated as proof of
+// working IPv6 connectivity, in which case the client would cancel
+// the IPv4 socket.
+//
+// Delaying the reset packet, if the error is "network unreachable",
+// gives the client time to establish a working IPv4 connection.
+// TODO: Move this special handling into go-tun2socks.
+func delayUnreachable(err error) {
+	// TODO: Use errors.As in go 1.13.
+	operr, ok := err.(*net.OpError)
+	if !ok {
+		return
+	}
+	syserr, ok := operr.Err.(*os.SyscallError)
+	if !ok {
+		return
+	}
+	if syserr.Err == syscall.ENETUNREACH {
+		log.Infof("Network is unreachable; using delayed reset workaround")
+		time.Sleep(30 * time.Second)
+	}
+}
+
 // TODO: Request upstream to make `conn` a `core.TCPConn` so we can avoid a type assertion.
 func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 	// DNS override
@@ -133,6 +163,7 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 		c, err = net.DialTCP(target.Network(), nil, target)
 	}
 	if err != nil {
+		delayUnreachable(err)
 		return err
 	}
 	summary.Synack = int32(time.Since(start).Seconds() * 1000)
