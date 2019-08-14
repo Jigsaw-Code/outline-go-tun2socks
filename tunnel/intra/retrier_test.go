@@ -281,3 +281,17 @@ func TestBackwardsUse(t *testing.T) {
 	s.close()
 	s.checkNoStats()
 }
+
+// Regression test for an issue in which the initial handshake timeout
+// continued to apply after the handshake completed.
+func TestIdle(t *testing.T) {
+	s := makeSetup(t)
+	s.sendUp()
+	s.sendDown()
+	// Wait for longer than the 1.2-second response timeout
+	time.Sleep(2 * time.Second)
+	// Try to send down some more data.
+	s.sendDown()
+	s.close()
+	s.checkNoStats()
+}
