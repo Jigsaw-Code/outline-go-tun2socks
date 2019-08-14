@@ -7,7 +7,7 @@ BUILDDIR=$(shell pwd)/build
 IMPORT_PATH=github.com/Jigsaw-Code/outline-go-tun2socks
 LDFLAGS='-s -w'
 ANDROID_LDFLAGS='-w' # Don't strip Android debug symbols so we can upload them to crash reporting tools.
-TUN2SOCKS_VERSION=v1.14.2
+TUN2SOCKS_VERSION=v1.16.2
 TUN2SOCKS_SRC_PATH=$(GOPATH)/src/github.com/eycorsican/go-tun2socks
 TUN2SOCKS_MOD_PATH=$(GOPATH)/pkg/mod/github.com/eycorsican/go-tun2socks\@$(TUN2SOCKS_VERSION)
 XGO_LDFLAGS='-s -w -X main.version=$(TUN2SOCKS_VERSION)'

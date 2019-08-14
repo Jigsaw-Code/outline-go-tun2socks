@@ -72,10 +72,10 @@ func (t *outlinetunnel) registerConnectionHandlers() {
 	var udpHandler core.UDPConnHandler
 	if t.isUDPEnabled {
 		udpHandler = socks.NewUDPHandler(
-			t.host, t.port, 30*time.Second, nil, nil)
+			t.host, t.port, 30*time.Second, nil, nil, nil)
 	} else {
 		udpHandler = dnsfallback.NewUDPHandler()
 	}
-	core.RegisterTCPConnHandler(socks.NewTCPHandler(t.host, t.port, nil))
+	core.RegisterTCPConnHandler(socks.NewTCPHandler(t.host, t.port, nil, nil))
 	core.RegisterUDPConnHandler(udpHandler)
 }
