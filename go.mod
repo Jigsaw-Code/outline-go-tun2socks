@@ -4,7 +4,7 @@ go 1.12
 
 require (
 	github.com/Jigsaw-Code/getsni v0.0.0-20190807203514-efe2dbf35d1f
-	github.com/eycorsican/go-tun2socks v1.14.2
+	github.com/eycorsican/go-tun2socks v1.16.2
 	github.com/karalabe/xgo v0.0.0-20190301120235-2d6d1848fb02 // indirect
 	github.com/miekg/dns v1.1.12 // indirect
 	golang.org/x/crypto v0.0.0-20190513172903-22d7a77e9e5f // indirect

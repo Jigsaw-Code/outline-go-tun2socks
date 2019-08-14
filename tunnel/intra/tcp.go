@@ -26,8 +26,8 @@ import (
 )
 
 type tcpHandler struct {
-	fakedns          net.Addr
-	truedns          net.Addr
+	fakedns          net.TCPAddr
+	truedns          net.TCPAddr
 	alwaysSplitHTTPS bool
 	listener         TCPListener
 }
@@ -57,7 +57,7 @@ type DuplexConn interface {
 // Currently this class only redirects DNS traffic to a
 // specified server.  (This should be rare for TCP.)
 // All other traffic is forwarded unmodified.
-func NewTCPHandler(fakedns, truedns net.Addr, alwaysSplitHTTPS bool, listener TCPListener) core.TCPConnHandler {
+func NewTCPHandler(fakedns, truedns net.TCPAddr, alwaysSplitHTTPS bool, listener TCPListener) core.TCPConnHandler {
 	return &tcpHandler{
 		fakedns:          fakedns,
 		truedns:          truedns,
@@ -66,27 +66,29 @@ func NewTCPHandler(fakedns, truedns net.Addr, alwaysSplitHTTPS bool, listener TC
 	}
 }
 
-func (h *tcpHandler) handleUpload(local net.Conn, remote DuplexConn, upload chan int64) {
+// TODO: Propagate TCP RST using local.Abort(), on appropriate errors.
+func (h *tcpHandler) handleUpload(local core.TCPConn, remote DuplexConn, upload chan int64) {
 	// TODO: Handle half-closed sockets more correctly if upstream
 	// changes `local` to a more detailed type than `net.Conn`.
 	bytes, _ := remote.ReadFrom(local)
-	local.Close()
+	local.CloseRead()
 	remote.CloseWrite()
 	upload <- bytes
 }
 
-func (h *tcpHandler) handleDownload(local net.Conn, remote DuplexConn) (bytes int64, err error) {
+func (h *tcpHandler) handleDownload(local core.TCPConn, remote DuplexConn) (bytes int64, err error) {
 	bytes, err = io.Copy(local, remote)
-	local.Close()
+	local.CloseWrite()
 	remote.CloseRead()
 	return
 }
 
 func (h *tcpHandler) forward(local net.Conn, remote DuplexConn, summary *TCPSocketSummary) {
+	localtcp := local.(core.TCPConn)
 	upload := make(chan int64)
 	start := time.Now()
-	go h.handleUpload(local, remote, upload)
-	download, _ := h.handleDownload(local, remote)
+	go h.handleUpload(localtcp, remote, upload)
+	download, _ := h.handleDownload(localtcp, remote)
 	summary.DownloadBytes = download
 	summary.UploadBytes = <-upload
 	summary.Duration = int32(time.Since(start).Seconds())
@@ -110,31 +112,25 @@ func filteredPort(addr net.Addr) int16 {
 	return -1
 }
 
-// TODO: Request upstream to make `conn` a `core.TCPConn` so we can have finer-
-// grained mimicry.
-func (h *tcpHandler) Handle(conn net.Conn, target net.Addr) error {
+// TODO: Request upstream to make `conn` a `core.TCPConn` so we can avoid a type assertion.
+func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 	// DNS override
-	// TODO: Consider whether this equality check is acceptable here.
-	// (e.g. domain names vs IPs, different serialization of IPv6)
-	if target == h.fakedns {
-		target = h.truedns
-	}
-	tcpaddr, err := net.ResolveTCPAddr(target.Network(), target.String())
-	if err != nil {
-		return err
+	if target.IP.Equal(h.fakedns.IP) && target.Port == h.fakedns.Port {
+		target = &h.truedns
 	}
 	var summary TCPSocketSummary
 	summary.ServerPort = filteredPort(target)
 	start := time.Now()
 	var c DuplexConn
+	var err error
 	if summary.ServerPort == 443 {
 		if h.alwaysSplitHTTPS {
-			c, err = DialWithSplit(target.Network(), tcpaddr)
+			c, err = DialWithSplit(target.Network(), target)
 		} else {
-			c, err = DialWithSplitRetry(target.Network(), tcpaddr, &summary)
+			c, err = DialWithSplitRetry(target.Network(), target, &summary)
 		}
 	} else {
-		c, err = net.DialTCP(target.Network(), nil, tcpaddr)
+		c, err = net.DialTCP(target.Network(), nil, target)
 	}
 	if err != nil {
 		return err

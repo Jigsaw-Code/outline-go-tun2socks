@@ -57,8 +57,8 @@ type udpHandler struct {
 
 	timeout  time.Duration
 	udpConns map[core.UDPConn]*tracker
-	fakedns  net.Addr
-	truedns  net.Addr
+	fakedns  net.UDPAddr
+	truedns  net.UDPAddr
 	listener UDPListener
 }
 
@@ -67,7 +67,7 @@ type udpHandler struct {
 // destination is `fakedns`.  Those packets are redirected to `truedns`.
 // Similarly, packets arriving from `truedns` have the source address replaced
 // with `fakedns`.
-func NewUDPHandler(fakedns, truedns net.Addr, timeout time.Duration, listener UDPListener) core.UDPConnHandler {
+func NewUDPHandler(fakedns, truedns net.UDPAddr, timeout time.Duration, listener UDPListener) core.UDPConnHandler {
 	return &udpHandler{
 		timeout:  timeout,
 		udpConns: make(map[core.UDPConn]*tracker, 8),
@@ -99,9 +99,10 @@ func (h *udpHandler) fetchUDPInput(conn core.UDPConn, t *tracker) {
 			return
 		}
 
-		if addr.String() == h.truedns.String() {
+		udpaddr := addr.(*net.UDPAddr)
+		if udpaddr.IP.Equal(h.truedns.IP) && udpaddr.Port == h.truedns.Port {
 			// Pretend that the reply was from the fake DNS server.
-			addr = h.fakedns
+			udpaddr = &h.fakedns
 			if n < 2 {
 				// Very short packet, cannot possibly be DNS.
 				t.complex = true
@@ -117,7 +118,7 @@ func (h *udpHandler) fetchUDPInput(conn core.UDPConn, t *tracker) {
 			t.complex = true
 		}
 		t.download += int64(n)
-		_, err = conn.WriteFrom(buf[:n], addr)
+		_, err = conn.WriteFrom(buf[:n], udpaddr)
 		if err != nil {
 			log.Warnf("failed to write UDP data to TUN")
 			return
@@ -130,7 +131,7 @@ func (h *udpHandler) fetchUDPInput(conn core.UDPConn, t *tracker) {
 	}
 }
 
-func (h *udpHandler) Connect(conn core.UDPConn, target net.Addr) error {
+func (h *udpHandler) Connect(conn core.UDPConn, target *net.UDPAddr) error {
 	bindAddr := &net.UDPAddr{IP: nil, Port: 0}
 	pc, err := net.ListenUDP(bindAddr.Network(), bindAddr)
 	if err != nil {
@@ -146,8 +147,7 @@ func (h *udpHandler) Connect(conn core.UDPConn, target net.Addr) error {
 	return nil
 }
 
-// TODO: Request upstream to make `addr` a `UDPAddr` for more efficient comparisons.
-func (h *udpHandler) DidReceiveTo(conn core.UDPConn, data []byte, addr net.Addr) error {
+func (h *udpHandler) ReceiveTo(conn core.UDPConn, data []byte, addr *net.UDPAddr) error {
 	h.Lock()
 	t, ok1 := h.udpConns[conn]
 	h.Unlock()
@@ -156,9 +156,9 @@ func (h *udpHandler) DidReceiveTo(conn core.UDPConn, data []byte, addr net.Addr)
 		return fmt.Errorf("connection %v->%v does not exists", conn.LocalAddr(), addr)
 	}
 
-	if addr.String() == h.fakedns.String() {
+	if addr.IP.Equal(h.fakedns.IP) && addr.Port == h.fakedns.Port {
 		// Send the query to the real DNS server.
-		addr = h.truedns
+		addr = &h.truedns
 		id := queryid(data)
 		if id < 0 {
 			t.complex = true
