@@ -16,9 +16,11 @@ package tun2socks
 
 import (
 	"errors"
-	"log"
 	"os"
 	"runtime/debug"
+
+	"github.com/eycorsican/go-tun2socks/common/log"
+	_ "github.com/eycorsican/go-tun2socks/common/log/simple" // Import simple log for the side effect of making logs printable.
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 )
@@ -28,6 +30,7 @@ const vpnMtu = 1500
 func init() {
 	// Conserve memory by increasing garbage collection frequency.
 	debug.SetGCPercent(10)
+	log.SetLevel(log.WARN)
 }
 
 func makeTunFile(fd int) (*os.File, error) {
@@ -46,11 +49,11 @@ func processInputPackets(tunnel tunnel.Tunnel, tun *os.File) {
 	for tunnel.IsConnected() {
 		len, err := tun.Read(buffer)
 		if err != nil {
-			log.Printf("Failed to read packet from TUN: %v", err)
+			log.Warnf("Failed to read packet from TUN: %v", err)
 			continue
 		}
 		if len == 0 {
-			log.Println("Read EOF from TUN")
+			log.Infof("Read EOF from TUN")
 			continue
 		}
 		tunnel.Write(buffer)
