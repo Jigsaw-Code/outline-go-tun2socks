@@ -9,6 +9,7 @@ import (
 	"github.com/Jigsaw-Code/outline-ss-server/shadowsocks"
 )
 
+// TODO: make these values configurable by exposing a struct with the connectivity methods.
 const (
 	tcpTimeoutMs        = udpTimeoutMs * udpMaxRetryAttempts
 	udpTimeoutMs        = 1000
@@ -16,41 +17,14 @@ const (
 	bufferLength        = 512
 )
 
-// ConnectivityResult holds the result of a connectivity check.
-type ConnectivityResult struct {
-	// Whehter the proxy is reachable through TCP.
-	IsReachable bool
-	// Whether the client's authentication credentials are valid.
-	IsAuthenticated bool
-	// Whether the proxy supports UDP forwarding.
-	IsUDPSupported bool
+// AuthenticationError is used to signal failed authentication to the Shadowsocks proxy.
+type AuthenticationError struct {
+	error
 }
 
-// CheckConnectivity determines whether the Shadowsocks proxy associated to `client` can relay TCP
-// and UDP traffic under the current network.
-func CheckConnectivity(client shadowsocks.Client) *ConnectivityResult {
-	tcpChan := make(chan error, 1)
-	udpChan := make(chan error, 1)
-	// Check whether the proxy is reachable and that the client is able to authenticate to the proxy
-	go func() {
-		tcpChan <- checkTCPConnectivityWithHTTP(client, "example.com")
-	}()
-	// Check whether UDP is supported
-	go func() {
-		udpChan <- CheckUDPConnectivityWithDNS(client, shadowsocks.NewAddr("1.1.1.1:53", "udp"))
-	}()
-
-	result := &ConnectivityResult{IsReachable: true, IsAuthenticated: true}
-	tcpErr := <-tcpChan
-	if tcpErr != nil {
-		// Determine whether the proxy was reachable over TCP based on the error type; reachability
-		// errors occur when dialing to the proxy, authentication errors occur during reads.
-		_, isDialError := tcpErr.(*net.OpError)
-		result.IsReachable = !isDialError
-		result.IsAuthenticated = false
-	}
-	result.IsUDPSupported = <-udpChan == nil
-	return result
+// ReachabilityError is used to signal an unreachable proxy.
+type ReachabilityError struct {
+	error
 }
 
 // CheckUDPConnectivityWithDNS determines whether the Shadowsocks proxy represented by `client` and
@@ -78,30 +52,28 @@ func CheckUDPConnectivityWithDNS(client shadowsocks.Client, resolverAddr net.Add
 		}
 		return nil
 	}
-	return errors.New("UDP not supported")
+	return errors.New("UDP connectivity check timed out")
 }
 
-// checkTCPConnectivityWithHTTP determines whether the proxy is reachable over TCP and validates the
+// CheckTCPConnectivityWithHTTP determines whether the proxy is reachable over TCP and validates the
 // client's authentication credentials by performing an HTTP HEAD request to `targetDomain`.
-func checkTCPConnectivityWithHTTP(client shadowsocks.Client, targetDomain string) (err error) {
+// Returns nil on success; AuthenticationError or ReachabilityError on failure.
+func CheckTCPConnectivityWithHTTP(client shadowsocks.Client, targetDomain string) error {
 	conn, err := client.DialTCP(nil, net.JoinHostPort(targetDomain, "80"))
 	if err != nil {
-		return
+		return &ReachabilityError{err}
 	}
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(time.Millisecond * tcpTimeoutMs))
-	req, err := http.NewRequest("HEAD", "/", nil)
-	if err != nil {
-		return
-	}
+	req, _ := http.NewRequest("HEAD", "/", nil)
 	req.Host = targetDomain
 	err = req.Write(conn)
 	if err != nil {
-		return
+		return &AuthenticationError{err}
 	}
 	n, err := conn.Read(make([]byte, bufferLength))
 	if n == 0 && err != nil {
-		return
+		return &AuthenticationError{err}
 	}
 	return nil
 }

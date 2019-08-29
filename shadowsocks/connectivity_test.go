@@ -3,6 +3,7 @@ package shadowsocks
 import (
 	"errors"
 	"net"
+	"reflect"
 	"testing"
 	"time"
 
@@ -26,39 +27,33 @@ func TestCheckUDPConnectivityWithDNS_Fail(t *testing.T) {
 	}
 }
 
-func TestCheckConnectivity_Success(t *testing.T) {
+func TestCheckTCPConnectivityWithHTTP_Success(t *testing.T) {
 	client := &fakeSSClient{}
-	expected := ConnectivityResult{IsReachable: true, IsAuthenticated: true, IsUDPSupported: true}
-	actual := CheckConnectivity(client)
-	if expected != *actual {
-		t.Fatalf("Expected %v, got %v", expected, actual)
+	err := CheckTCPConnectivityWithHTTP(client, "")
+	if err != nil {
+		t.Fail()
 	}
 }
 
-func TestCheckConnectivity_FailReachability(t *testing.T) {
+func TestCheckTCPConnectivityWithHTTP_FailReachability(t *testing.T) {
 	client := &fakeSSClient{failReachability: true}
-	expected := ConnectivityResult{IsReachable: false, IsAuthenticated: false, IsUDPSupported: false}
-	actual := CheckConnectivity(client)
-	if expected != *actual {
-		t.Fatalf("Expected %v, got %v", expected, actual)
+	err := CheckTCPConnectivityWithHTTP(client, "")
+	if err == nil {
+		t.Fail()
+	}
+	if _, ok := err.(*ReachabilityError); !ok {
+		t.Fatalf("Expected reachability error, got: %v", reflect.TypeOf(err))
 	}
 }
 
-func TestCheckConnectivity_FailAuthentication(t *testing.T) {
+func TestCheckTCPConnectivityWithHTTP_FailAuthentication(t *testing.T) {
 	client := &fakeSSClient{failAuthentication: true}
-	expected := ConnectivityResult{IsReachable: true, IsAuthenticated: false, IsUDPSupported: false}
-	actual := CheckConnectivity(client)
-	if expected != *actual {
-		t.Fatalf("Expected %v, got %v", expected, actual)
+	err := CheckTCPConnectivityWithHTTP(client, "")
+	if err == nil {
+		t.Fail()
 	}
-}
-
-func TestCheckConnectivity_FailUDP(t *testing.T) {
-	client := &fakeSSClient{failUDP: true}
-	expected := ConnectivityResult{IsReachable: true, IsAuthenticated: true, IsUDPSupported: false}
-	actual := CheckConnectivity(client)
-	if expected != *actual {
-		t.Fatalf("Expected %v, got %v", expected, actual)
+	if _, ok := err.(*AuthenticationError); !ok {
+		t.Fatalf("Expected authentication error, got: %v", reflect.TypeOf(err))
 	}
 }
 
