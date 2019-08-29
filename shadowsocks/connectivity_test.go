@@ -14,7 +14,7 @@ func TestCheckUDPConnectivityWithDNS_Success(t *testing.T) {
 	client := &fakeSSClient{}
 	err := CheckUDPConnectivityWithDNS(client, shadowsocks.NewAddr("", ""))
 	if err != nil {
-		t.Fail()
+		t.Fatalf("Unexpected error: %v", err)
 	}
 }
 
@@ -28,33 +28,37 @@ func TestCheckUDPConnectivityWithDNS_Fail(t *testing.T) {
 
 func TestCheckConnectivity_Success(t *testing.T) {
 	client := &fakeSSClient{}
-	r := CheckConnectivity(client)
-	if !r.IsReachable || !r.IsAuthenticated || !r.IsUDPSupported {
-		t.Fail()
+	expected := ConnectivityResult{IsReachable: true, IsAuthenticated: true, IsUDPSupported: true}
+	actual := CheckConnectivity(client)
+	if expected != *actual {
+		t.Fatalf("Expected %v, got %v", expected, actual)
 	}
 }
 
 func TestCheckConnectivity_FailReachability(t *testing.T) {
 	client := &fakeSSClient{failReachability: true}
-	r := CheckConnectivity(client)
-	if r.IsReachable || r.IsAuthenticated || r.IsUDPSupported {
-		t.Fail()
+	expected := ConnectivityResult{IsReachable: false, IsAuthenticated: false, IsUDPSupported: false}
+	actual := CheckConnectivity(client)
+	if expected != *actual {
+		t.Fatalf("Expected %v, got %v", expected, actual)
 	}
 }
 
 func TestCheckConnectivity_FailAuthentication(t *testing.T) {
 	client := &fakeSSClient{failAuthentication: true}
-	r := CheckConnectivity(client)
-	if !r.IsReachable || r.IsAuthenticated || r.IsUDPSupported {
-		t.Fail()
+	expected := ConnectivityResult{IsReachable: true, IsAuthenticated: false, IsUDPSupported: false}
+	actual := CheckConnectivity(client)
+	if expected != *actual {
+		t.Fatalf("Expected %v, got %v", expected, actual)
 	}
 }
 
 func TestCheckConnectivity_FailUDP(t *testing.T) {
 	client := &fakeSSClient{failUDP: true}
-	r := CheckConnectivity(client)
-	if !r.IsReachable || !r.IsAuthenticated || r.IsUDPSupported {
-		t.Fail()
+	expected := ConnectivityResult{IsReachable: true, IsAuthenticated: true, IsUDPSupported: false}
+	actual := CheckConnectivity(client)
+	if expected != *actual {
+		t.Fatalf("Expected %v, got %v", expected, actual)
 	}
 }
 
