@@ -2,8 +2,8 @@ package shadowsocks
 
 import (
 	"errors"
-	"fmt"
 	"net"
+	"net/http"
 	"time"
 
 	"github.com/Jigsaw-Code/outline-ss-server/shadowsocks"
@@ -89,9 +89,13 @@ func checkTCPConnectivityWithHTTP(client shadowsocks.Client, targetDomain string
 		return
 	}
 	defer conn.Close()
-	conn.SetReadDeadline(time.Now().Add(time.Millisecond * tcpTimeoutMs))
-	payload := fmt.Sprintf("HEAD / HTTP/1.1\r\nHost: %v\r\n\r\n", targetDomain)
-	_, err = conn.Write([]byte(payload))
+	conn.SetDeadline(time.Now().Add(time.Millisecond * tcpTimeoutMs))
+	req, err := http.NewRequest("HEAD", "/", nil)
+	if err != nil {
+		return
+	}
+	req.Host = targetDomain
+	err = req.Write(conn)
 	if err != nil {
 		return
 	}
