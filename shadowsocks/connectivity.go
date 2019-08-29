@@ -62,16 +62,19 @@ func CheckUDPConnectivityWithDNS(client shadowsocks.Client, resolverAddr net.Add
 		return err
 	}
 	defer conn.Close()
-	conn.SetReadDeadline(time.Now().Add(time.Millisecond * udpTimeoutMs))
 	buf := make([]byte, bufferLength)
 	for attempt := 0; attempt < udpMaxRetryAttempts; attempt++ {
+		conn.SetDeadline(time.Now().Add(time.Millisecond * udpTimeoutMs))
 		_, err := conn.WriteTo(getDNSRequest(), resolverAddr)
 		if err != nil {
 			continue
 		}
-		n, _, err := conn.ReadFrom(buf)
+		n, addr, err := conn.ReadFrom(buf)
 		if n == 0 && err != nil {
 			continue
+		}
+		if addr.String() != resolverAddr.String() {
+			continue // Ensure we got a response from the resolver.
 		}
 		return nil
 	}

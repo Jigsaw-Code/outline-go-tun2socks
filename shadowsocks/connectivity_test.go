@@ -88,18 +88,20 @@ func (c *fakeSSClient) ListenUDP(laddr *net.UDPAddr) (net.PacketConn, error) {
 // Fake PacketConn that fails `ReadFrom` calls when `failRead` is true.
 type fakePacketConn struct {
 	net.PacketConn
+	addr     net.Addr
 	failRead bool
 }
 
 func (c *fakePacketConn) WriteTo(b []byte, addr net.Addr) (int, error) {
+	c.addr = addr
 	return len(b), nil // Write always succeeds
 }
 
 func (c *fakePacketConn) ReadFrom(b []byte) (int, net.Addr, error) {
 	if c.failRead {
-		return 0, nil, errors.New("Fake read error")
+		return 0, c.addr, errors.New("Fake read error")
 	}
-	return len(b), nil, nil
+	return len(b), c.addr, nil
 }
 
 // Fake DuplexConn that fails `Read` calls when `failRead` is true.
