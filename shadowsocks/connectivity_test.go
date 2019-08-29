@@ -10,17 +10,17 @@ import (
 	"github.com/Jigsaw-Code/outline-ss-server/shadowsocks"
 )
 
-func TestIsUDPSupported_Success(t *testing.T) {
+func TestCheckUDPConnectivityWithDNS_Success(t *testing.T) {
 	client := &fakeSSClient{}
-	err := IsUDPSupported(client, shadowsocks.NewAddr("", ""))
+	err := CheckUDPConnectivityWithDNS(client, shadowsocks.NewAddr("", ""))
 	if err != nil {
 		t.Fail()
 	}
 }
 
-func TestIsUDPSupported_Fail(t *testing.T) {
+func TestCheckUDPConnectivityWithDNS_Fail(t *testing.T) {
 	client := &fakeSSClient{failUDP: true}
-	err := IsUDPSupported(client, shadowsocks.NewAddr("", ""))
+	err := CheckUDPConnectivityWithDNS(client, shadowsocks.NewAddr("", ""))
 	if err == nil {
 		t.Fail()
 	}

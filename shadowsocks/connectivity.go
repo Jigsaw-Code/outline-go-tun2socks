@@ -33,11 +33,11 @@ func CheckConnectivity(client shadowsocks.Client) *ConnectivityResult {
 	udpChan := make(chan error, 1)
 	// Check whether the proxy is reachable and that the client is able to authenticate to the proxy
 	go func() {
-		tcpChan <- isTCPSupported(client, "example.com:80")
+		tcpChan <- checkTCPConnectivityWithHTTP(client, "example.com")
 	}()
 	// Check whether UDP is supported
 	go func() {
-		udpChan <- IsUDPSupported(client, shadowsocks.NewAddr("1.1.1.1:53", "udp"))
+		udpChan <- CheckUDPConnectivityWithDNS(client, shadowsocks.NewAddr("1.1.1.1:53", "udp"))
 	}()
 
 	result := &ConnectivityResult{IsReachable: true, IsAuthenticated: true}
@@ -53,10 +53,10 @@ func CheckConnectivity(client shadowsocks.Client) *ConnectivityResult {
 	return result
 }
 
-// IsUDPSupported determines whether the Shadowsocks proxy represented by `client` and the network
-// support UDP traffic by resolving a DNS query though a resolver at `resolverAddr`.
+// CheckUDPConnectivityWithDNS determines whether the Shadowsocks proxy represented by `client` and
+// the network support UDP traffic by issuing a DNS query though a resolver at `resolverAddr`.
 // Returns nil on success or an error on failure.
-func IsUDPSupported(client shadowsocks.Client, resolverAddr net.Addr) error {
+func CheckUDPConnectivityWithDNS(client shadowsocks.Client, resolverAddr net.Addr) error {
 	conn, err := client.ListenUDP(nil)
 	if err != nil {
 		return err
@@ -78,17 +78,16 @@ func IsUDPSupported(client shadowsocks.Client, resolverAddr net.Addr) error {
 	return errors.New("UDP not supported")
 }
 
-// isTCPSupported determines whether the proxy is reachable over TCP and validates the client's
-// authentication credentials by performing an HTTP HEAD request to `targetAddr`.
-func isTCPSupported(client shadowsocks.Client, targetAddr string) (err error) {
-	conn, err := client.DialTCP(nil, targetAddr)
+// checkTCPConnectivityWithHTTP determines whether the proxy is reachable over TCP and validates the
+// client's authentication credentials by performing an HTTP HEAD request to `targetDomain`.
+func checkTCPConnectivityWithHTTP(client shadowsocks.Client, targetDomain string) (err error) {
+	conn, err := client.DialTCP(nil, net.JoinHostPort(targetDomain, "80"))
 	if err != nil {
 		return
 	}
 	defer conn.Close()
 	conn.SetReadDeadline(time.Now().Add(time.Millisecond * tcpTimeoutMs))
-	targetHost, _, _ := net.SplitHostPort(targetAddr) // Ignore error, DialTCP would have failed
-	payload := fmt.Sprintf("HEAD / HTTP/1.1\r\nHost: %v\r\n\r\n", targetHost)
+	payload := fmt.Sprintf("HEAD / HTTP/1.1\r\nHost: %v\r\n\r\n", targetDomain)
 	_, err = conn.Write([]byte(payload))
 	if err != nil {
 		return
@@ -108,7 +107,6 @@ func getDNSRequest() []byte {
 		0, 0, // [6-7]   ANCOUNT (number of answers)
 		0, 0, // [8-9]   NSCOUNT (number of name server records)
 		0, 0, // [10-11] ARCOUNT (number of additional records)
-		7, 'e', 'x', 'a', 'm', 'p', 'l', 'e',
 		3, 'c', 'o', 'm',
 		0,    // null terminator of FQDN (root TLD)
 		0, 1, // QTYPE, set to A
