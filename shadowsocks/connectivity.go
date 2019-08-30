@@ -56,17 +56,24 @@ func CheckUDPConnectivityWithDNS(client shadowsocks.Client, resolverAddr net.Add
 }
 
 // CheckTCPConnectivityWithHTTP determines whether the proxy is reachable over TCP and validates the
-// client's authentication credentials by performing an HTTP HEAD request to `targetDomain`.
-// Returns nil on success; AuthenticationError or ReachabilityError on failure.
-func CheckTCPConnectivityWithHTTP(client shadowsocks.Client, targetDomain string) error {
-	conn, err := client.DialTCP(nil, net.JoinHostPort(targetDomain, "80"))
+// client's authentication credentials by performing an HTTP HEAD request to `targetURL`, which must
+// be of the form: http://[host](:[port])(/[path]). Returns nil on success, error if `targetURL` is
+// invalid, AuthenticationError or ReachabilityError on connectivity failure.
+func CheckTCPConnectivityWithHTTP(client shadowsocks.Client, targetURL string) error {
+	req, err := http.NewRequest("HEAD", targetURL, nil)
+	if err != nil {
+		return err
+	}
+	targetAddr := req.Host
+	if !hasPort(targetAddr) {
+		targetAddr = net.JoinHostPort(targetAddr, "80")
+	}
+	conn, err := client.DialTCP(nil, targetAddr)
 	if err != nil {
 		return &ReachabilityError{err}
 	}
 	defer conn.Close()
 	conn.SetDeadline(time.Now().Add(time.Millisecond * tcpTimeoutMs))
-	req, _ := http.NewRequest("HEAD", "/", nil)
-	req.Host = targetDomain
 	err = req.Write(conn)
 	if err != nil {
 		return &AuthenticationError{err}
@@ -91,4 +98,9 @@ func getDNSRequest() []byte {
 		0, 1, // QTYPE, set to A
 		0, 1, // QCLASS, set to 1 = IN (Internet)
 	}
+}
+
+func hasPort(hostPort string) bool {
+	_, _, err := net.SplitHostPort(hostPort)
+	return err == nil
 }
