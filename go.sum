@@ -18,6 +18,8 @@ github.com/eycorsican/go-tun2socks v1.14.2 h1:WeceCiqIM38+/6kNygC5ucDEes6D5X5lwI
 github.com/eycorsican/go-tun2socks v1.14.2/go.mod h1:itJVcg8T4Lc1r+72CNpCV/SUNO8of0z/jFeAt31cQbA=
 github.com/eycorsican/go-tun2socks v1.16.2 h1:pczsTNxP9NBDAsE9lhTnXoh6VLRf8FaZP2JBLv3KLWA=
 github.com/eycorsican/go-tun2socks v1.16.2/go.mod h1:itJVcg8T4Lc1r+72CNpCV/SUNO8of0z/jFeAt31cQbA=
+github.com/eycorsican/go-tun2socks v1.16.3 h1:ymewwy70EMAmLACXbYK7IPgY7p2jZrup7pj0lJrva+g=
+github.com/eycorsican/go-tun2socks v1.16.3/go.mod h1:itJVcg8T4Lc1r+72CNpCV/SUNO8of0z/jFeAt31cQbA=
 github.com/golang/protobuf v1.2.0 h1:P3YflyNX/ehuJFLhxviNdFxQPkGK5cDcApsge1SqnvM=
 github.com/golang/protobuf v1.2.0/go.mod h1:6lQm79b+lXiMfvg/cZm0SGofjICqVBUtrP5yJMmIC1U=
 github.com/karalabe/xgo v0.0.0-20190301120235-2d6d1848fb02 h1:nI4Q7WQDcng8eRmi8bRP1SXlJIYLkgdgR7ZhJuzPbhs=
