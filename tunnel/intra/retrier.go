@@ -31,6 +31,10 @@ type retrier struct {
 	// conn is the current underlying connection.  It is only modified by the reader
 	// thread, so the reader functions may access it without acquiring a lock.
 	conn *net.TCPConn
+	// External read and write deadlines.  These need to be stored here so that
+	// they can be re-applied in the event of a retry.
+	readDeadline  time.Time
+	writeDeadline time.Time
 	// Time to wait between the first write and the first read before triggering a
 	// retry.
 	timeout time.Duration
@@ -88,22 +92,26 @@ func timeout(before, after time.Time) time.Duration {
 	return 1200*time.Millisecond + 2*rtt
 }
 
+// DefaultTimeout is the value that will cause DialWithSplitRetry to use the system's
+// default TCP timeout (typically 2-3 minutes).
+const DefaultTimeout time.Duration = 0
+
 // DialWithSplitRetry returns a TCP connection that transparently retries by
 // splitting the initial upstream segment if the socket closes without receiving a
 // reply.  Like net.Conn, it is intended for two-threaded use, with one thread calling
 // Read and CloseRead, and another calling Write, ReadFrom, and CloseWrite.
-func DialWithSplitRetry(network string, addr *net.TCPAddr, summary *TCPSocketSummary) (DuplexConn, error) {
+// synackTimeout controls how long to wait for the TCP handshake to complete.
+func DialWithSplitRetry(addr *net.TCPAddr, synackTimeout time.Duration, summary *TCPSocketSummary) (DuplexConn, error) {
 	before := time.Now()
-	conn, err := net.DialTCP(network, nil, addr)
+	conn, err := (&net.Dialer{Timeout: synackTimeout}).Dial(addr.Network(), addr.String())
 	if err != nil {
 		return nil, err
 	}
 	after := time.Now()
 
 	r := &retrier{
-		network:           network,
 		addr:              addr,
-		conn:              conn,
+		conn:              conn.(*net.TCPConn),
 		timeout:           timeout(before, after),
 		retryCompleteFlag: make(chan struct{}),
 		readCloseFlag:     make(chan struct{}),
@@ -143,14 +151,16 @@ func (r *retrier) Read(buf []byte) (n int, err error) {
 func (r *retrier) retry(buf []byte) (n int, err error) {
 	r.conn.Close()
 	var newConn *net.TCPConn
-	if newConn, err = net.DialTCP(r.network, nil, r.addr); err != nil {
+	if newConn, err = net.DialTCP(r.addr.Network(), nil, r.addr); err != nil {
 		return
 	}
 	r.conn = newConn
 	first, second := splitHello(r.hello)
 	r.stats.Split = int16(len(first))
 	// Set Retry to a non-nil value, indicating that a retry occurred.
-	r.summary.Retry = &r.stats
+	if r.summary != nil {
+		r.summary.Retry = &r.stats
+	}
 	if _, err = r.conn.Write(first); err != nil {
 		return
 	}
@@ -167,6 +177,9 @@ func (r *retrier) retry(buf []byte) (n int, err error) {
 	if r.writeClosed() {
 		r.conn.CloseWrite()
 	}
+	// The caller might have set read or write deadlines before the retry.
+	r.conn.SetReadDeadline(r.readDeadline)
+	r.conn.SetWriteDeadline(r.writeDeadline)
 	return r.conn.Read(buf)
 }
 
@@ -274,4 +287,53 @@ func (r *retrier) CloseWrite() error {
 	r.mutex.Lock()
 	defer r.mutex.Unlock()
 	return r.conn.CloseWrite()
+}
+
+func (r *retrier) Close() error {
+	if err := r.CloseWrite(); err != nil {
+		return err
+	}
+	return r.CloseRead()
+}
+
+// LocalAddr behaves slightly strangely: its value may change as a
+// result of a retry.  However, LocalAddr is largely useless for
+// TCP client sockets anyway, so nothing should be relying on this.
+func (r *retrier) LocalAddr() net.Addr {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	return r.conn.LocalAddr()
+}
+
+func (r *retrier) RemoteAddr() net.Addr {
+	return r.addr
+}
+
+func (r *retrier) SetReadDeadline(t time.Time) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.readDeadline = t
+	// Don't enforce read deadlines until after the retry
+	// is complete.  Retry relies on setting its own read
+	// deadline, and we don't want this to interfere.
+	if r.retryCompleted() {
+		return r.conn.SetReadDeadline(t)
+	}
+	return nil
+}
+
+func (r *retrier) SetWriteDeadline(t time.Time) error {
+	r.mutex.Lock()
+	defer r.mutex.Unlock()
+	r.writeDeadline = t
+	return r.conn.SetWriteDeadline(t)
+}
+
+func (r *retrier) SetDeadline(t time.Time) error {
+	e1 := r.SetReadDeadline(t)
+	e2 := r.SetWriteDeadline(t)
+	if e1 != nil {
+		return e1
+	}
+	return e2
 }

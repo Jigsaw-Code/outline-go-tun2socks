@@ -32,7 +32,7 @@ func makeSetup(t *testing.T) *setup {
 		t.Error("Server isn't TCP?")
 	}
 	var summary TCPSocketSummary
-	clientSide, err := DialWithSplitRetry("tcp", serverAddr, &summary)
+	clientSide, err := DialWithSplitRetry(serverAddr, DefaultTimeout, &summary)
 	if err != nil {
 		t.Error(err)
 	}
