@@ -25,9 +25,16 @@ import (
 	"github.com/eycorsican/go-tun2socks/core"
 )
 
+type TCPHandler interface {
+	core.TCPConnHandler
+	SetDNS(DNSTransport)
+}
+
 type tcpHandler struct {
+	TCPHandler
 	fakedns          net.TCPAddr
 	truedns          net.TCPAddr
+	dns              atomicdns
 	alwaysSplitHTTPS bool
 	listener         TCPListener
 }
@@ -58,7 +65,7 @@ type DuplexConn interface {
 // Currently this class only redirects DNS traffic to a
 // specified server.  (This should be rare for TCP.)
 // All other traffic is forwarded unmodified.
-func NewTCPHandler(fakedns, truedns net.TCPAddr, alwaysSplitHTTPS bool, listener TCPListener) core.TCPConnHandler {
+func NewTCPHandler(fakedns, truedns net.TCPAddr, alwaysSplitHTTPS bool, listener TCPListener) TCPHandler {
 	return &tcpHandler{
 		fakedns:          fakedns,
 		truedns:          truedns,
@@ -115,6 +122,11 @@ func filteredPort(addr net.Addr) int16 {
 func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 	// DNS override
 	if target.IP.Equal(h.fakedns.IP) && target.Port == h.fakedns.Port {
+		dns := h.dns.Load()
+		if dns != nil {
+			go Accept(dns, conn)
+			return nil
+		}
 		target = &h.truedns
 	}
 	var summary TCPSocketSummary
@@ -122,6 +134,7 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 	start := time.Now()
 	var c DuplexConn
 	var err error
+	// TODO: Cancel dialing if c is closed.
 	if summary.ServerPort == 443 {
 		if h.alwaysSplitHTTPS {
 			c, err = DialWithSplit(target)
@@ -138,4 +151,8 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 	go h.forward(conn, c, &summary)
 	log.Infof("new proxy connection for target: %s:%s", target.Network(), target.String())
 	return nil
+}
+
+func (h *tcpHandler) SetDNS(dns DNSTransport) {
+	h.dns.Store(dns)
 }
