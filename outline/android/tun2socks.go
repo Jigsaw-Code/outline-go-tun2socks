@@ -16,9 +16,17 @@ package tun2socks
 
 import (
 	"errors"
+	"runtime/debug"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
+	"github.com/eycorsican/go-tun2socks/common/log"
 )
+
+func init() {
+	// Conserve memory by increasing garbage collection frequency.
+	debug.SetGCPercent(10)
+	log.SetLevel(log.WARN)
+}
 
 // OutlineTunnel embeds the tun2socks.OutlineTunnel interface so it gets exported by gobind.
 type OutlineTunnel interface {
@@ -40,14 +48,14 @@ func ConnectSocksTunnel(fd int, host string, port int, isUDPEnabled bool) (Outli
 	if port <= 0 || port > 65535 {
 		return nil, errors.New("Must provide a valid port number")
 	}
-	tun, err := makeTunFile(fd)
+	tun, err := tunnel.MakeTunFile(fd)
 	if err != nil {
 		return nil, err
 	}
-	tunnel, err := tunnel.NewTunnel(host, uint16(port), isUDPEnabled, tun)
+	t, err := tunnel.NewOutlineTunnel(host, uint16(port), isUDPEnabled, tun)
 	if err != nil {
 		return nil, err
 	}
-	go processInputPackets(tunnel, tun)
-	return tunnel, nil
+	go tunnel.ProcessInputPackets(t, tun)
+	return t, nil
 }

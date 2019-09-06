@@ -15,8 +15,17 @@
 package tun2socks
 
 import (
+	"runtime/debug"
+
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
+	"github.com/eycorsican/go-tun2socks/common/log"
 )
+
+func init() {
+	// Conserve memory by increasing garbage collection frequency.
+	debug.SetGCPercent(10)
+	log.SetLevel(log.WARN)
+}
 
 // IntraTunnel embeds the tun2socks.Tunnel interface so it gets exported by gobind.
 // Intra does not need any methods beyond the basic Tunnel interface.
@@ -36,14 +45,14 @@ type IntraTunnel interface {
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
 func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, alwaysSplitHTTPS bool, listener tunnel.IntraListener) (IntraTunnel, error) {
-	tun, err := makeTunFile(fd)
+	tun, err := tunnel.MakeTunFile(fd)
 	if err != nil {
 		return nil, err
 	}
-	tunnel, err := tunnel.NewIntraTunnel(fakedns, udpdns, tcpdns, tun, alwaysSplitHTTPS, listener)
+	t, err := tunnel.NewIntraTunnel(fakedns, udpdns, tcpdns, tun, alwaysSplitHTTPS, listener)
 	if err != nil {
 		return nil, err
 	}
-	go processInputPackets(tunnel, tun)
-	return tunnel, nil
+	go tunnel.ProcessInputPackets(t, tun)
+	return t, nil
 }

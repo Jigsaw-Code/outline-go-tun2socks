@@ -14,11 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Builds a tun2socks Android library for Intra or Outline.
+# Usage: ./build_android.sh [intra|outline]
 readonly BUILD_DIR=build/android
 readonly LOG_FILE=$(mktemp)
+readonly TARGET=android-${1:-outline}
 
 rm -rf $BUILD_DIR
-make clean && make android 2>&1 | tee $LOG_FILE
+make clean && make $TARGET 2>&1 | tee $LOG_FILE
 
 # Parse the Go working directory to copy the unstripped JNI binaries so symbols can be uploaded
 # to crash reporting tools.
