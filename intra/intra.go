@@ -27,12 +27,6 @@ func init() {
 	log.SetLevel(log.WARN)
 }
 
-// IntraTunnel embeds the tun2socks.Tunnel interface so it gets exported by gobind.
-// Intra does not need any methods beyond the basic Tunnel interface.
-type IntraTunnel interface {
-	tunnel.Tunnel
-}
-
 // ConnectIntraTunnel reads packets from a TUN device and applies the Intra routing
 // rules.  Currently, this only consists of redirecting DNS packets to a specified
 // server; all other data flows directly to its destination.
@@ -44,7 +38,7 @@ type IntraTunnel interface {
 //
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, alwaysSplitHTTPS bool, listener tunnel.IntraListener) (IntraTunnel, error) {
+func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, alwaysSplitHTTPS bool, listener tunnel.IntraListener) (tunnel.Tunnel, error) {
 	tun, err := tunnel.MakeTunFile(fd)
 	if err != nil {
 		return nil, err

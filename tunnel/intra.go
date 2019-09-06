@@ -24,6 +24,7 @@ import (
 	"github.com/eycorsican/go-tun2socks/core"
 )
 
+// IntraListener receives usage statistics when a UDP or TCP socket is closed.
 type IntraListener interface {
 	intra.UDPListener
 	intra.TCPListener
@@ -31,11 +32,8 @@ type IntraListener interface {
 
 type intratunnel struct {
 	*tunnel
-	fakedns          string
-	udpdns           string
-	tcpdns           string
-	alwaysSplitHTTPS bool
-	listener         IntraListener
+	tcp core.TCPConnHandler
+	udp core.UDPConnHandler
 }
 
 // NewIntraTunnel creates a connected Intra session.
@@ -50,43 +48,40 @@ func NewIntraTunnel(fakedns, udpdns, tcpdns string, tunWriter io.WriteCloser, al
 	}
 	core.RegisterOutputFn(tunWriter.Write)
 	base := &tunnel{tunWriter, core.NewLWIPStack(), true}
-	s := &intratunnel{
-		tunnel:           base,
-		fakedns:          fakedns,
-		udpdns:           udpdns,
-		tcpdns:           tcpdns,
-		alwaysSplitHTTPS: alwaysSplitHTTPS,
-		listener:         listener,
+	t := &intratunnel{
+		tunnel: base,
 	}
-	if err := s.registerConnectionHandlers(); err != nil {
+	if err := t.registerConnectionHandlers(fakedns, udpdns, tcpdns, alwaysSplitHTTPS, listener); err != nil {
 		return nil, err
 	}
-	return s, nil
+	return t, nil
 }
 
 // Registers Intra's custom UDP and TCP connection handlers to the tun2socks core.
-func (t *intratunnel) registerConnectionHandlers() error {
+func (t *intratunnel) registerConnectionHandlers(fakedns, udpdns, tcpdns string, alwaysSplitHTTPS bool, listener IntraListener) error {
 	// RFC 5382 REQ-5 requires a timeout no shorter than 2 hours and 4 minutes.
 	timeout, _ := time.ParseDuration("2h4m")
 
-	udpfakedns, err := net.ResolveUDPAddr("udp", t.fakedns)
+	udpfakedns, err := net.ResolveUDPAddr("udp", fakedns)
 	if err != nil {
 		return err
 	}
-	udpdns, err := net.ResolveUDPAddr("udp", t.udpdns)
+	udptruedns, err := net.ResolveUDPAddr("udp", udpdns)
 	if err != nil {
 		return err
 	}
-	core.RegisterUDPConnHandler(intra.NewUDPHandler(*udpfakedns, *udpdns, timeout, t.listener))
+	t.udp = intra.NewUDPHandler(*udpfakedns, *udptruedns, timeout, listener)
+	core.RegisterUDPConnHandler(t.udp)
 
-	tcpfakedns, err := net.ResolveTCPAddr("tcp", t.fakedns)
+	tcpfakedns, err := net.ResolveTCPAddr("tcp", fakedns)
 	if err != nil {
 		return err
 	}
-	tcpdns, err := net.ResolveTCPAddr("tcp", t.tcpdns)
+	tcptruedns, err := net.ResolveTCPAddr("tcp", tcpdns)
 	if err != nil {
 		return err
 	}
-	core.RegisterTCPConnHandler(intra.NewTCPHandler(*tcpfakedns, *tcpdns, t.alwaysSplitHTTPS, t.listener))
+	t.tcp = intra.NewTCPHandler(*tcpfakedns, *tcptruedns, alwaysSplitHTTPS, listener)
+	core.RegisterTCPConnHandler(t.tcp)
 	return nil
 }
