@@ -54,7 +54,7 @@ func init() {
 // `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
 // Sets an error if the tunnel fails to connect.
-func ConnectSocksTunnel(tunWriter TunWriter, host string, port int, isUDPEnabled bool) (tunnel.OutlineTunnel, error) {
+func ConnectSocksTunnel(tunWriter TunWriter, host string, port int, isUDPEnabled bool) (OutlineTunnel, error) {
 	if tunWriter == nil || host == "" || port <= 0 || port > 65535 {
 		return nil, errors.New("Must provide a TunWriter, a valid SOCKS proxy host and port")
 	}

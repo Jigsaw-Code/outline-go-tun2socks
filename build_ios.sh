@@ -29,4 +29,4 @@ rm -rf Versions Resources
 popd > /dev/null
 
 # Add Info.plist
-cp apple/Info.plist $BUILD_DIR/$TUN2SOCKS_FRAMEWORK/
+cp outline/apple/Info.plist $BUILD_DIR/$TUN2SOCKS_FRAMEWORK/
