@@ -59,12 +59,12 @@ func CheckConnectivity(host string, port int, password, cipher string) (int, err
 		// The TCP connectivity checks succeeded, which means UDP is not supported.
 		return udpConnectivity, nil
 	}
-	_, isRachabilityError := tcpErr.(*oss.ReachabilityError)
+	_, isReachabilityError := tcpErr.(*oss.ReachabilityError)
 	_, isAuthError := tcpErr.(*oss.AuthenticationError)
-	if !isRachabilityError && !isAuthError {
+	if !isReachabilityError && !isAuthError {
 		// The error is not related to the connectivity checks.
 		return unexpected, tcpErr
-	} else if !isRachabilityError {
+	} else if !isReachabilityError {
 		// Proxy is reachable, which means the authentication check failed.
 		return authentication, nil
 	}
