@@ -24,7 +24,7 @@ import (
 	"github.com/eycorsican/go-tun2socks/proxy/socks"
 )
 
-// Tunnel represents a tunnel from a TUN device to a server.
+// OutlineTunnel represents a tunnel from a TUN device to a server.
 type OutlineTunnel interface {
 	Tunnel
 	// SetUDPEnabled indicates whether the tunnel and/or the network support UDP traffic.
@@ -38,13 +38,13 @@ type outlinetunnel struct {
 	isUDPEnabled bool
 }
 
-// NewTunnel connects a tunnel to a SOCKS5 server and returns a `Tunnel` object.
+// NewOutlineTunnel connects a tunnel to a SOCKS5 server and returns a `Tunnel` object.
 //
 // `host` is the IP or domain of the SOCKS server.
 // `port` is the port of the SOCKS server.
 // `isUDPEnabled` indicates if the SOCKS server and the network support proxying UDP traffic.
 // `tunWriter` is used to output packets back to the TUN device.
-func NewTunnel(host string, port uint16, isUDPEnabled bool, tunWriter io.WriteCloser) (OutlineTunnel, error) {
+func NewOutlineTunnel(host string, port uint16, isUDPEnabled bool, tunWriter io.WriteCloser) (OutlineTunnel, error) {
 	if host == "" || tunWriter == nil {
 		return nil, errors.New("Must provide a valid host address, and TUN writer")
 	}
