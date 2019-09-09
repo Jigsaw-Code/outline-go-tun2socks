@@ -38,7 +38,7 @@ func CheckConnectivity(host string, port int, password, cipher string) (int, err
 		// TODO: Inspect error for invalid cipher error or proxy host resolution failure.
 		return unexpected, err
 	}
-	tcpChan := make(chan error, 1)
+	tcpChan := make(chan error)
 	// Check whether the proxy is reachable and that the client is able to authenticate to the proxy
 	go func() {
 		tcpChan <- oss.CheckTCPConnectivityWithHTTP(client, "http://example.com")
