@@ -20,4 +20,4 @@ readonly TUN2SOCKS_FRAMEWORK=Tun2socks.framework
 rm -rf $BUILD_DIR
 make clean && make macos
 # Add Info.plist
-cp apple/Info.plist $BUILD_DIR/$TUN2SOCKS_FRAMEWORK/Versions/A/Resources/
+cp outline/apple/Info.plist $BUILD_DIR/$TUN2SOCKS_FRAMEWORK/Versions/A/Resources/
