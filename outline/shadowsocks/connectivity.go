@@ -9,21 +9,21 @@ import (
 	"github.com/Jigsaw-Code/outline-ss-server/shadowsocks"
 )
 
-// Outline error codes. Must be kept in sync with definitions in outline-client/corodva-plugin-outline/outlinePlugin.js
+// Outline error codes. Must be kept in sync with definitions in outline-client/cordova-plugin-outline/outlinePlugin.js
 const (
-	noError int = iota
-	unexpected
-	noVPNPermissions
-	authentication
-	udpConnectivity
-	unreachable
-	vpnStartFailure
-	ilegalConfiguration
-	shadowsocksStartFailure
-	configureSystemProxyFailure
-	noAdminPermissions
-	unsupportedRoutingTable
-	systemMisconfigured
+	noError                     = 0
+	unexpected                  = 1
+	noVPNPermissions            = 2
+	authenticationFailure       = 3
+	udpConnectivity             = 4
+	unreachable                 = 5
+	vpnStartFailure             = 6
+	ilegalConfiguration         = 7
+	shadowsocksStartFailure     = 8
+	configureSystemProxyFailure = 9
+	noAdminPermissions          = 10
+	unsupportedRoutingTable     = 11
+	systemMisconfigured         = 12
 )
 
 const reachabilityTimeout = 10 * time.Second
@@ -39,42 +39,37 @@ func CheckConnectivity(host string, port int, password, cipher string) (int, err
 		return unexpected, err
 	}
 	tcpChan := make(chan error, 1)
-	udpChan := make(chan error, 1)
 	// Check whether the proxy is reachable and that the client is able to authenticate to the proxy
 	go func() {
 		tcpChan <- oss.CheckTCPConnectivityWithHTTP(client, "http://example.com")
 	}()
 	// Check whether UDP is supported
-	go func() {
-		udpChan <- oss.CheckUDPConnectivityWithDNS(client, shadowsocks.NewAddr("1.1.1.1:53", "udp"))
-	}()
-	tcpErr := <-tcpChan
-	udpErr := <-udpChan
-
+	udpErr := oss.CheckUDPConnectivityWithDNS(client, shadowsocks.NewAddr("1.1.1.1:53", "udp"))
 	if udpErr == nil {
 		// The UDP connectvity check is a superset of the TCP checks. If the other tests fail,
 		// assume it's due to intermittent network conditions and declare success anyway.
 		return noError, nil
-	} else if tcpErr == nil {
+	}
+	tcpErr := <-tcpChan
+	if tcpErr == nil {
 		// The TCP connectivity checks succeeded, which means UDP is not supported.
 		return udpConnectivity, nil
 	}
+	// TODO: use errors.Is when upgrading to Go 1.13
 	_, isReachabilityError := tcpErr.(*oss.ReachabilityError)
 	_, isAuthError := tcpErr.(*oss.AuthenticationError)
-	if !isReachabilityError && !isAuthError {
-		// The error is not related to the connectivity checks.
-		return unexpected, tcpErr
-	} else if !isReachabilityError {
-		// Proxy is reachable, which means the authentication check failed.
-		return authentication, nil
+	if isAuthError {
+		return authenticationFailure, nil
+	} else if isReachabilityError {
+		return unreachable, nil
 	}
-	// All the checks failed because the proxy is unreachable.
-	return unreachable, nil
+	// The error is not related to the connectivity checks.
+	return unexpected, tcpErr
 }
 
 // CheckServerReachable determines whether the server at `host:port` is reachable over TCP.
 // Returns an error if the server is unreachable.
-func CheckServerReachable(host string, port int, timeoutMs int) error {
+func CheckServerReachable(host string, port int) error {
 	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(port)), reachabilityTimeout)
 	if err != nil {
 		return err
