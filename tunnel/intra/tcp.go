@@ -68,8 +68,6 @@ func NewTCPHandler(fakedns, truedns net.TCPAddr, alwaysSplitHTTPS bool, listener
 
 // TODO: Propagate TCP RST using local.Abort(), on appropriate errors.
 func (h *tcpHandler) handleUpload(local core.TCPConn, remote DuplexConn, upload chan int64) {
-	// TODO: Handle half-closed sockets more correctly if upstream
-	// changes `local` to a more detailed type than `net.Conn`.
 	bytes, _ := remote.ReadFrom(local)
 	local.CloseRead()
 	remote.CloseWrite()

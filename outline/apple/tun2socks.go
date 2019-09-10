@@ -37,6 +37,8 @@ func init() {
 	// Apple VPN extensions have a memory limit of 15MB. Conserve memory by increasing garbage
 	// collection frequency and returning memory to the OS every minute.
 	debug.SetGCPercent(10)
+	// TODO: Check if this is still needed in go 1.13, which returns memory to the OS
+	// automatically.
 	ticker := time.NewTicker(time.Minute * 1)
 	go func() {
 		for range ticker.C {

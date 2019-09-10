@@ -1,6 +1,7 @@
 package intra
 
 import (
+	"errors"
 	"io"
 	"math/rand"
 	"net"
@@ -123,7 +124,8 @@ func (r *retrier) Read(buf []byte) (n int, err error) {
 	if !r.retryCompleted() {
 		r.mutex.Lock()
 		if err != nil {
-			if neterr, ok := err.(net.Error); ok {
+			var neterr net.Error
+			if errors.As(err, &neterr) {
 				r.stats.Timeout = neterr.Timeout()
 			}
 			// Read failed.  Retry.
