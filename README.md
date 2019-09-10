@@ -14,6 +14,14 @@ Go package for building [go-tun2socks](https://github.com/eycorsican/go-tun2sock
 - Docker (Windows, Linux)
 - Other common utilities (e.g.: git)
 
+Additionally, github.com/Jigsaw-Code/outline-ss-server must be in $GOROOT/src, as well as all of its dependencies.
+This is necessary because gomobile does not support modules.  You can fetch these dependencies in the required way by running
+
+```bash
+git clone git@github.com:Jigsaw-Code/outline-ss-server.git $GOPATH/src/github.com/Jigsaw-Code/outline-ss-server
+GO111MODULE=off go get -d $GOPATH/src/github.com/Jigsaw-Code/outline-ss-server/...
+```
+
 ## macOS Framework
 
 As of Go 1.13, gomobile does not support building frameworks for macOS. We have patched gomobile to enable building a framework for macOS by replacing the default iOS simulator build.

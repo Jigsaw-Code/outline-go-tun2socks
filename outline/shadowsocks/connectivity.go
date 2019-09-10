@@ -55,7 +55,6 @@ func CheckConnectivity(host string, port int, password, cipher string) (int, err
 		// The TCP connectivity checks succeeded, which means UDP is not supported.
 		return udpConnectivity, nil
 	}
-	// TODO: use errors.Is when upgrading to Go 1.13
 	_, isReachabilityError := tcpErr.(*oss.ReachabilityError)
 	_, isAuthError := tcpErr.(*oss.AuthenticationError)
 	if isAuthError {
