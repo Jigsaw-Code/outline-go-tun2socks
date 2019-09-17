@@ -80,6 +80,7 @@ func (h *udpHandler) ReceiveTo(conn core.UDPConn, data []byte, addr *net.UDPAddr
 	if !ok {
 		return fmt.Errorf("connection %v->%v does not exist", conn.LocalAddr(), addr)
 	}
+	proxyConn.SetDeadline(time.Now().Add(h.timeout))
 	_, err := proxyConn.WriteTo(data, addr)
 	return err
 }
