@@ -31,10 +31,10 @@ import (
 type OutlineTunnel interface {
 	Tunnel
 
-	// NetworkConnectivityChanged should be called by the native platform when there has been a
-	// network connectivity change. `isConnected` indicates whether the network is connected.
+	// UpdateUDPSupport determines if UDP is supported following a network connectivity change.
+	// Sets the tunnel's UDP connection handler accordingly, falling back to DNS over TCP if UDP is not supported.
 	// Returns whether UDP proxying is supported in the new network.
-	NetworkConnectivityChanged(isConnected bool) bool
+	UpdateUDPSupport() bool
 }
 
 type outlinetunnel struct {
@@ -71,10 +71,7 @@ func NewOutlineTunnel(host string, port int, password, cipher string, isUDPEnabl
 	return t, nil
 }
 
-func (t *outlinetunnel) NetworkConnectivityChanged(isConnected bool) bool {
-	if !isConnected {
-		return false // Don't react to lost network connectivity.
-	}
+func (t *outlinetunnel) UpdateUDPSupport() bool {
 	client, err := shadowsocks.NewClient(t.host, t.port, t.password, t.cipher)
 	if err != nil {
 		return false
