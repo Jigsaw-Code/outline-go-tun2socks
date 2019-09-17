@@ -12,7 +12,12 @@ type tcpHandler struct {
 	client shadowsocks.Client
 }
 
-// NewTCPHandler TODO
+// NewTCPHandler returns a Shadowsocks TCP connection handler.
+//
+// `host` is the hostname of the Shadowsocks proxy server.
+// `port` is the port of the Shadowsocks proxy server.
+// `password` is password used to authenticate to the server.
+// `cipher` is the encryption cipher of the Shadowsocks proxy.
 func NewTCPHandler(host string, port int, password, cipher string) core.TCPConnHandler {
 	client, err := shadowsocks.NewClient(host, port, password, cipher)
 	if err != nil {

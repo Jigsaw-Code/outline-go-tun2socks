@@ -18,7 +18,13 @@ type udpHandler struct {
 	conns   map[core.UDPConn]net.PacketConn
 }
 
-// NewUDPHandler TODO
+// NewUDPHandler returns a Shadowsocks UDP connection handler.
+//
+// `host` is the hostname of the Shadowsocks proxy server.
+// `port` is the port of the Shadowsocks proxy.
+// `password` is password used to authenticate to the proxy.
+// `cipher` is the encryption cipher of the Shadowsocks proxy.
+// `timeout` is the UDP read and write timeout.
 func NewUDPHandler(host string, port int, password, cipher string, timeout time.Duration) core.UDPConnHandler {
 	client, err := shadowsocks.NewClient(host, port, password, cipher)
 	if err != nil {
@@ -39,11 +45,11 @@ func (h *udpHandler) Connect(conn core.UDPConn, target *net.UDPAddr) error {
 	h.Lock()
 	h.conns[conn] = proxyConn
 	h.Unlock()
-	go h.processDownstreamUDP(conn, proxyConn)
+	go h.handleDownstreamUDP(conn, proxyConn)
 	return nil
 }
 
-func (h *udpHandler) processDownstreamUDP(conn core.UDPConn, proxyConn net.PacketConn) {
+func (h *udpHandler) handleDownstreamUDP(conn core.UDPConn, proxyConn net.PacketConn) {
 	buf := core.NewBytes(core.BufSize)
 	defer func() {
 		h.Close(conn)
@@ -72,7 +78,7 @@ func (h *udpHandler) ReceiveTo(conn core.UDPConn, data []byte, addr *net.UDPAddr
 	proxyConn, ok := h.conns[conn]
 	h.Unlock()
 	if !ok {
-		return fmt.Errorf("connection %v->%v does not exists", conn.LocalAddr(), addr)
+		return fmt.Errorf("connection %v->%v does not exist", conn.LocalAddr(), addr)
 	}
 	_, err := proxyConn.WriteTo(data, addr)
 	return err
