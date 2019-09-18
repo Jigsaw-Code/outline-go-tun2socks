@@ -46,7 +46,6 @@ func (t *tunnel) Disconnect() {
 		return
 	}
 	t.isConnected = false
-	t.tunWriter.Close()
 	t.lwipStack.Close()
 }
 

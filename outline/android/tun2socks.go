@@ -33,18 +33,20 @@ type OutlineTunnel interface {
 	tunnel.OutlineTunnel
 }
 
-// ConnectSocksTunnel reads packets from a TUN device and routes it to a SOCKS server. Returns an
-// AndroidTunnel instance and does *not* take ownership of the TUN file descriptor; the
+// ConnectShadowsocksTunnel reads packets from a TUN device and routes it to a Shadowsocks proxy server.
+// Returns an AndroidTunnel instance and does *not* take ownership of the TUN file descriptor; the
 // caller is responsible for closing after AndroidTunnel disconnects.
 //
 // `fd` is the file descriptor to the VPN TUN device. Must be set to blocking mode.
 // `host` is  IP address of the SOCKS proxy server.
 // `port` is the port of the SOCKS proxy server.
+// `password` is the password of the Shadowsocks proxy.
+// `cipher` is the encryption cipher the Shadowsocks proxy.
 // `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectSocksTunnel(fd int, host string, port int, isUDPEnabled bool) (OutlineTunnel, error) {
+func ConnectShadowsocksTunnel(fd int, host string, port int, password, cipher string, isUDPEnabled bool) (OutlineTunnel, error) {
 	if port <= 0 || port > 65535 {
 		return nil, errors.New("Must provide a valid port number")
 	}
@@ -52,7 +54,7 @@ func ConnectSocksTunnel(fd int, host string, port int, isUDPEnabled bool) (Outli
 	if err != nil {
 		return nil, err
 	}
-	t, err := tunnel.NewOutlineTunnel(host, uint16(port), isUDPEnabled, tun)
+	t, err := tunnel.NewOutlineTunnel(host, port, password, cipher, isUDPEnabled, tun)
 	if err != nil {
 		return nil, err
 	}

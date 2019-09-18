@@ -76,15 +76,3 @@ func CheckServerReachable(host string, port int) error {
 	conn.Close()
 	return nil
 }
-
-// CheckUDPConnectivity determines whether UDP forwarding is supported by a Shadowsocks proxy.
-// Returns an error if the server does not support UDP.
-// TODO: remove this once we support a Shadowsocks tunnel and deprecate the SOCKS interface,
-// as we will be able to perform the UDP connectivity check directly from Go.
-func CheckUDPConnectivity(host string, port int, password, cipher string) error {
-	client, err := shadowsocks.NewClient(host, port, password, cipher)
-	if err != nil {
-		return err
-	}
-	return oss.CheckUDPConnectivityWithDNS(client, shadowsocks.NewAddr("1.1.1.1:53", "udp"))
-}
