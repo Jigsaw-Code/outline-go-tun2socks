@@ -34,12 +34,12 @@ type OutlineTunnel interface {
 }
 
 // ConnectShadowsocksTunnel reads packets from a TUN device and routes it to a Shadowsocks proxy server.
-// Returns an AndroidTunnel instance and does *not* take ownership of the TUN file descriptor; the
-// caller is responsible for closing after AndroidTunnel disconnects.
+// Returns an OutlineTunnel instance and does *not* take ownership of the TUN file descriptor; the
+// caller is responsible for closing after OutlineTunnel disconnects.
 //
 // `fd` is the file descriptor to the VPN TUN device. Must be set to blocking mode.
-// `host` is  IP address of the SOCKS proxy server.
-// `port` is the port of the SOCKS proxy server.
+// `host` is  IP address of the Shadowsocks proxy server.
+// `port` is the port of the Shadowsocks proxy server.
 // `password` is the password of the Shadowsocks proxy.
 // `cipher` is the encryption cipher the Shadowsocks proxy.
 // `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
