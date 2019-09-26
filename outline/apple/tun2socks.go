@@ -16,7 +16,9 @@ package tun2socks
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"math"
 	"runtime/debug"
 	"time"
 
@@ -47,18 +49,22 @@ func init() {
 	}()
 }
 
-// ConnectSocksTunnel reads packets from a TUN device and routes it to a SOCKS server. Returns an
-// OutlineTunnel instance that should be used to input packets to the tunnel.
+// ConnectShadowsocksTunnel reads packets from a TUN device and routes it to a Shadowsocks proxy server.
+// Returns an OutlineTunnel instance that should be used to input packets to the tunnel.
 //
 // `tunWriter` is used to output packets to the TUN (VPN).
-// `host` is the IP address of the SOCKS proxy server.
-// `port` is the port of the SOCKS proxy server.
+// `host` is  IP address of the Shadowsocks proxy server.
+// `port` is the port of the Shadowsocks proxy server.
+// `password` is the password of the Shadowsocks proxy.
+// `cipher` is the encryption cipher the Shadowsocks proxy.
 // `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
 // Sets an error if the tunnel fails to connect.
-func ConnectSocksTunnel(tunWriter TunWriter, host string, port int, isUDPEnabled bool) (OutlineTunnel, error) {
-	if tunWriter == nil || host == "" || port <= 0 || port > 65535 {
-		return nil, errors.New("Must provide a TunWriter, a valid SOCKS proxy host and port")
+func ConnectShadowsocksTunnel(tunWriter TunWriter, host string, port int, password, cipher string, isUDPEnabled bool) (OutlineTunnel, error) {
+	if tunWriter == nil {
+		return nil, errors.New("Must provide a TunWriter")
+	} else if port <= 0 || port > math.MaxUint16 {
+		return nil, fmt.Errorf("Invalid port number: %v", port)
 	}
-	return tunnel.NewOutlineTunnel(host, uint16(port), isUDPEnabled, tunWriter)
+	return tunnel.NewOutlineTunnel(host, port, password, cipher, isUDPEnabled, tunWriter)
 }

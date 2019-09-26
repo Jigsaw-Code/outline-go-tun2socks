@@ -15,7 +15,8 @@
 package tun2socks
 
 import (
-	"errors"
+	"fmt"
+	"math"
 	"runtime/debug"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
@@ -34,12 +35,12 @@ type OutlineTunnel interface {
 }
 
 // ConnectShadowsocksTunnel reads packets from a TUN device and routes it to a Shadowsocks proxy server.
-// Returns an AndroidTunnel instance and does *not* take ownership of the TUN file descriptor; the
-// caller is responsible for closing after AndroidTunnel disconnects.
+// Returns an OutlineTunnel instance and does *not* take ownership of the TUN file descriptor; the
+// caller is responsible for closing after OutlineTunnel disconnects.
 //
 // `fd` is the file descriptor to the VPN TUN device. Must be set to blocking mode.
-// `host` is  IP address of the SOCKS proxy server.
-// `port` is the port of the SOCKS proxy server.
+// `host` is  IP address of the Shadowsocks proxy server.
+// `port` is the port of the Shadowsocks proxy server.
 // `password` is the password of the Shadowsocks proxy.
 // `cipher` is the encryption cipher the Shadowsocks proxy.
 // `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
@@ -47,8 +48,8 @@ type OutlineTunnel interface {
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
 func ConnectShadowsocksTunnel(fd int, host string, port int, password, cipher string, isUDPEnabled bool) (OutlineTunnel, error) {
-	if port <= 0 || port > 65535 {
-		return nil, errors.New("Must provide a valid port number")
+	if port <= 0 || port > math.MaxUint16 {
+		return nil, fmt.Errorf("Invalid port number: %v", port)
 	}
 	tun, err := tunnel.MakeTunFile(fd)
 	if err != nil {
