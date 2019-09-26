@@ -16,7 +16,9 @@ package tun2socks
 
 import (
 	"errors"
+	"fmt"
 	"io"
+	"math"
 	"runtime/debug"
 	"time"
 
@@ -61,8 +63,8 @@ func init() {
 func ConnectShadowsocksTunnel(tunWriter TunWriter, host string, port int, password, cipher string, isUDPEnabled bool) (OutlineTunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("Must provide a TunWriter")
-	} else if port <= 0 || port > 65535 {
-		return nil, errors.New("Must provide a valid port number")
+	} else if port <= 0 || port > math.MaxUint16 {
+		return nil, fmt.Errorf("Invalid port number: %v", port)
 	}
 	return tunnel.NewOutlineTunnel(host, port, password, cipher, isUDPEnabled, tunWriter)
 }

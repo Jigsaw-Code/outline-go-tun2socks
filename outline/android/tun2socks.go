@@ -15,7 +15,8 @@
 package tun2socks
 
 import (
-	"errors"
+	"fmt"
+	"math"
 	"runtime/debug"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
@@ -47,8 +48,8 @@ type OutlineTunnel interface {
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
 func ConnectShadowsocksTunnel(fd int, host string, port int, password, cipher string, isUDPEnabled bool) (OutlineTunnel, error) {
-	if port <= 0 || port > 65535 {
-		return nil, errors.New("Must provide a valid port number")
+	if port <= 0 || port > math.MaxUint16 {
+		return nil, fmt.Errorf("Invalid port number: %v", port)
 	}
 	tun, err := tunnel.MakeTunFile(fd)
 	if err != nil {
