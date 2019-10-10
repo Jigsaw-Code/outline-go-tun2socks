@@ -18,4 +18,4 @@ readonly BUILD_DIR=build/linux
 
 rm -rf $BUILD_DIR
 make clean && make linux
-mv $BUILD_DIR/tun2socks-linux-amd64 $BUILD_DIR/tun2socks
+mv $BUILD_DIR/electron-linux-amd64 $BUILD_DIR/tun2socks
