@@ -159,6 +159,8 @@ func (h *udpHandler) doDoh(dns DNSTransport, t *tracker, conn core.UDPConn, data
 	resp, err := dns.Query(data)
 	if err == nil {
 		conn.WriteFrom(resp, &h.fakedns)
+	} else {
+		log.Warnf("DoH query failed: %v", err)
 	}
 	if !t.complex {
 		// conn was only used for this DNS query, so it's unlikely to be used again.
@@ -222,6 +224,7 @@ func (h *udpHandler) Close(conn core.UDPConn) {
 
 	if t, ok := h.udpConns[conn]; ok {
 		t.conn.Close()
+		// TODO: Cancel any outstanding DoH queries.
 		duration := int32(time.Since(t.start).Seconds())
 		h.listener.OnUDPSocketClosed(&UDPSocketSummary{t.upload, t.download, duration})
 		delete(h.udpConns, conn)

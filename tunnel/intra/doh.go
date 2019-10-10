@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/ipmap"
+	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
 const (
@@ -70,21 +71,21 @@ type transport struct {
 }
 
 // Wait up to three seconds for the TCP handshake to complete.
-const tcpTimeout time.Duration = 3e9
+const tcpTimeout time.Duration = 3 * time.Second
 
 func (t *transport) dial(network, addr string) (net.Conn, error) {
-	fmt.Printf("Dialing %s\n", addr)
-	domain, portstr, err := net.SplitHostPort(addr)
+	log.Debugf("Dialing %s", addr)
+	domain, portStr, err := net.SplitHostPort(addr)
 	if err != nil {
 		return nil, err
 	}
-	portnum, err := strconv.Atoi(portstr)
+	port, err := strconv.Atoi(portStr)
 	if err != nil {
 		return nil, err
 	}
 
-	wrap := func(ip net.IP) *net.TCPAddr {
-		return &net.TCPAddr{IP: ip, Port: portnum}
+	tcpaddr := func(ip net.IP) *net.TCPAddr {
+		return &net.TCPAddr{IP: ip, Port: port}
 	}
 
 	// TODO: Improve IP fallback strategy with parallelism and Happy Eyeballs.
@@ -92,22 +93,23 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 	ips := t.ips.Get(domain)
 	confirmed := ips.Confirmed()
 	if confirmed != nil {
-		fmt.Printf("Trying confirmed IP %s for addr %s\n", confirmed.String(), addr)
-		if conn, err = DialWithSplitRetry(wrap(confirmed), tcpTimeout, nil); err == nil {
-			fmt.Printf("Confirmed IP %s worked\n", confirmed.String())
+		log.Debugf("Trying confirmed IP %s for addr %s", confirmed.String(), addr)
+		if conn, err = DialWithSplitRetry(tcpaddr(confirmed), tcpTimeout, nil); err == nil {
+			log.Infof("Confirmed IP %s worked", confirmed.String())
 			return conn, nil
 		}
-		fmt.Printf("Confirmed IP %s failed with err %v\n", confirmed.String(), err)
+		log.Debugf("Confirmed IP %s failed with err %v", confirmed.String(), err)
 		ips.Disconfirm(confirmed)
 	}
 
-	fmt.Println("Trying all IPs")
+	log.Debugf("Trying all IPs")
 	for _, ip := range ips.GetAll() {
 		if ip.Equal(confirmed) {
 			// Don't try this IP twice.
 			continue
 		}
-		if conn, err = DialWithSplitRetry(wrap(ip), tcpTimeout, nil); err == nil {
+		if conn, err = DialWithSplitRetry(tcpaddr(ip), tcpTimeout, nil); err == nil {
+			log.Infof("Found working IP: %s", ip.String())
 			return conn, nil
 		}
 	}
@@ -130,7 +132,7 @@ func NewDoHTransport(rawurl string, addrs []string, listener DNSListener) (DNSTr
 	portStr := parsedurl.Port()
 	var port int
 	if len(portStr) > 0 {
-		port, err = strconv.Atoi(parsedurl.Port())
+		port, err = strconv.Atoi(portStr)
 		if err != nil {
 			return nil, err
 		}
@@ -295,7 +297,7 @@ func forwardQuery(t DNSTransport, q []byte, c io.Writer) error {
 // and close the writer if there was an error.
 func forwardQueryAndCheck(t DNSTransport, q []byte, c io.WriteCloser) {
 	if err := forwardQuery(t, q, c); err != nil {
-		fmt.Printf("Query forwarding failed: %v\n", err)
+		log.Warnf("Query forwarding failed: %v", err)
 		c.Close()
 	}
 }
@@ -304,16 +306,29 @@ func forwardQueryAndCheck(t DNSTransport, q []byte, c io.WriteCloser) {
 // to this DNSTransport.
 func Accept(t DNSTransport, c io.ReadWriteCloser) {
 	qlbuf := make([]byte, 2)
-	for n, err := c.Read(qlbuf); err == nil && n == 2; n, err = c.Read(qlbuf) {
+	for {
+		n, err := c.Read(qlbuf)
+		if n == 0 {
+			log.Debugf("TCP query socket clean shutdown")
+			break
+		}
+		if err != nil {
+			log.Warnf("Error reading from TCP query socket: %v", err)
+			break
+		}
+		if n < 2 {
+			log.Warnf("Incomplete query length")
+			break
+		}
 		qlen := binary.BigEndian.Uint16(qlbuf)
 		q := make([]byte, qlen)
 		n, err = c.Read(q)
 		if err != nil {
-			fmt.Printf("Error reading query: %v\n", err)
+			log.Warnf("Error reading query: %v", err)
 			break
 		}
 		if n != int(qlen) {
-			fmt.Printf("Incomplete query: %d < %d\n", n, qlen)
+			log.Warnf("Incomplete query: %d < %d", n, qlen)
 			break
 		}
 		go forwardQueryAndCheck(t, q, c)
