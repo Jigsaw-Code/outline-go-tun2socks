@@ -46,8 +46,9 @@ type TCPListener interface {
 	OnTCPSocketClosed(*TCPSocketSummary)
 }
 
+// DuplexConn represents a bidirectional stream socket.
 type DuplexConn interface {
-	io.ReadWriter
+	net.Conn
 	io.ReaderFrom
 	CloseWrite() error
 	CloseRead() error
@@ -123,9 +124,9 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 	var err error
 	if summary.ServerPort == 443 {
 		if h.alwaysSplitHTTPS {
-			c, err = DialWithSplit(target.Network(), target)
+			c, err = DialWithSplit(target)
 		} else {
-			c, err = DialWithSplitRetry(target.Network(), target, &summary)
+			c, err = DialWithSplitRetry(target, DefaultTimeout, &summary)
 		}
 	} else {
 		c, err = net.DialTCP(target.Network(), nil, target)
