@@ -43,6 +43,8 @@ type IntraTunnel interface {
 	// this transport instead of forwarding them to `udpdns`/`tcpdns`.  The
 	// transport can be changed at any time during operation, but must not be nil.
 	SetDNS(doh.Transport)
+	// When set to true, Intra will pre-emptively split all HTTPS connections.
+	SetAlwaysSplitHTTPS(bool)
 }
 
 type intratunnel struct {
@@ -58,8 +60,9 @@ type intratunnel struct {
 //    This will normally be a reserved or remote IP address, port 53.
 // `udpdns` and `tcpdns` are the actual location of the DNS server in use.
 //    These will normally be localhost with a high-numbered port.
-// TODO: Remove `udpdns` and `tcpdns` once DNSTransport is fully rolled out.
-func NewIntraTunnel(fakedns, udpdns, tcpdns string, tunWriter io.WriteCloser, alwaysSplitHTTPS bool, listener IntraListener) (IntraTunnel, error) {
+// `dohdns` is the initial DOH transport.
+// TODO: Remove `udpdns` and `tcpdns` once DOH-in-Go is fully rolled out.
+func NewIntraTunnel(fakedns, udpdns, tcpdns string, dohdns doh.Transport, tunWriter io.WriteCloser, listener IntraListener) (IntraTunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("Must provide a valid TUN writer")
 	}
@@ -68,14 +71,17 @@ func NewIntraTunnel(fakedns, udpdns, tcpdns string, tunWriter io.WriteCloser, al
 	t := &intratunnel{
 		tunnel: base,
 	}
-	if err := t.registerConnectionHandlers(fakedns, udpdns, tcpdns, alwaysSplitHTTPS, listener); err != nil {
+	if err := t.registerConnectionHandlers(fakedns, udpdns, tcpdns, listener); err != nil {
 		return nil, err
+	}
+	if dohdns != nil {
+		t.SetDNS(dohdns)
 	}
 	return t, nil
 }
 
 // Registers Intra's custom UDP and TCP connection handlers to the tun2socks core.
-func (t *intratunnel) registerConnectionHandlers(fakedns, udpdns, tcpdns string, alwaysSplitHTTPS bool, listener IntraListener) error {
+func (t *intratunnel) registerConnectionHandlers(fakedns, udpdns, tcpdns string, listener IntraListener) error {
 	// RFC 5382 REQ-5 requires a timeout no shorter than 2 hours and 4 minutes.
 	timeout, _ := time.ParseDuration("2h4m")
 
@@ -98,7 +104,7 @@ func (t *intratunnel) registerConnectionHandlers(fakedns, udpdns, tcpdns string,
 	if err != nil {
 		return err
 	}
-	t.tcp = intra.NewTCPHandler(*tcpfakedns, *tcptruedns, alwaysSplitHTTPS, listener)
+	t.tcp = intra.NewTCPHandler(*tcpfakedns, *tcptruedns, listener)
 	core.RegisterTCPConnHandler(t.tcp)
 	return nil
 }
@@ -111,4 +117,8 @@ func (t *intratunnel) SetDNS(dns doh.Transport) {
 
 func (t *intratunnel) GetDNS() doh.Transport {
 	return t.dns
+}
+
+func (t *intratunnel) SetAlwaysSplitHTTPS(s bool) {
+	t.tcp.SetAlwaysSplitHTTPS(s)
 }

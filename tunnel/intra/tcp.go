@@ -28,10 +28,11 @@ import (
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/split"
 )
 
-// TCPHandler is a core TCP handler that also supports DOH.
+// TCPHandler is a core TCP handler that also supports DOH and splitting control.
 type TCPHandler interface {
 	core.TCPConnHandler
 	SetDNS(doh.Transport)
+	SetAlwaysSplitHTTPS(bool)
 }
 
 type tcpHandler struct {
@@ -63,12 +64,11 @@ type TCPListener interface {
 // Currently this class only redirects DNS traffic to a
 // specified server.  (This should be rare for TCP.)
 // All other traffic is forwarded unmodified.
-func NewTCPHandler(fakedns, truedns net.TCPAddr, alwaysSplitHTTPS bool, listener TCPListener) TCPHandler {
+func NewTCPHandler(fakedns, truedns net.TCPAddr, listener TCPListener) TCPHandler {
 	return &tcpHandler{
-		fakedns:          fakedns,
-		truedns:          truedns,
-		alwaysSplitHTTPS: alwaysSplitHTTPS,
-		listener:         listener,
+		fakedns:  fakedns,
+		truedns:  truedns,
+		listener: listener,
 	}
 }
 
@@ -154,4 +154,8 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 
 func (h *tcpHandler) SetDNS(dns doh.Transport) {
 	h.dns.Store(dns)
+}
+
+func (h *tcpHandler) SetAlwaysSplitHTTPS(s bool) {
+	h.alwaysSplitHTTPS = s
 }
