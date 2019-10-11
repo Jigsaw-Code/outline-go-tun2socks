@@ -58,7 +58,7 @@ func main() {
 	args.tunAddr = flag.String("tunAddr", "10.0.85.2", "TUN interface IP address")
 	args.tunGw = flag.String("tunGw", "10.0.85.1", "TUN interface gateway")
 	args.tunMask = flag.String("tunMask", "255.255.255.0", "TUN interface network mask; prefixlen for IPv6")
-	args.tunDNS = flag.String("tunDNS", "1.1.1.1,9.9.9.9", "Comma-separated list of DNS resolvers for the TUN interface (Windows only)")
+	args.tunDNS = flag.String("tunDNS", "1.1.1.1,9.9.9.9,208.67.222.222", "Comma-separated list of DNS resolvers for the TUN interface (Windows only)")
 	args.tunName = flag.String("tunName", "tun0", "TUN interface name")
 	args.proxyHost = flag.String("proxyHost", "", "Shadowsocks proxy hostname or IP address")
 	args.proxyPort = flag.Int("proxyPort", 0, "Shadowsocks proxy port number")
@@ -102,8 +102,6 @@ func main() {
 		log.Errorf("Connectivity checks failed with code %v", code)
 		os.Exit(code)
 	}
-	// Override the user flag if UDP is not supported.
-	*args.dnsFallback = *args.dnsFallback || code == oss.UDPConnectivity
 
 	// Open TUN device
 	dnsResolvers := strings.Split(*args.tunDNS, ",")
@@ -113,14 +111,12 @@ func main() {
 		os.Exit(oss.Unexpected)
 	}
 	// Output packets to TUN device
-	core.RegisterOutputFn(func(data []byte) (int, error) {
-		return tunDevice.Write(data)
-	})
+	core.RegisterOutputFn(tunDevice.Write)
 
 	// Register TCP and UDP connection handlers
 	core.RegisterTCPConnHandler(
 		shadowsocks.NewTCPHandler(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher))
-	if *args.dnsFallback {
+	if *args.dnsFallback || code == oss.UDPConnectivity {
 		// UDP connectivity not supported, fall back to DNS over TCP.
 		core.RegisterUDPConnHandler(dnsfallback.NewUDPHandler())
 	} else {
@@ -129,11 +125,11 @@ func main() {
 	}
 
 	// Configure LWIP stack to receive input data from the TUN device
-	lwipWriter := core.NewLWIPStack().(io.Writer)
+	lwipWriter := core.NewLWIPStack()
 	go func() {
 		_, err := io.CopyBuffer(lwipWriter, tunDevice, make([]byte, mtu))
 		if err != nil {
-			log.Errorf("Failed to write data to network stack")
+			log.Errorf("Failed to write data to network stack: %v", err)
 			os.Exit(oss.Unexpected)
 		}
 	}()
@@ -142,7 +138,8 @@ func main() {
 
 	osSignals := make(chan os.Signal, 1)
 	signal.Notify(osSignals, os.Interrupt, os.Kill, syscall.SIGTERM, syscall.SIGHUP)
-	<-osSignals
+	sig := <-osSignals
+	log.Debugf("Received signal: %v", sig)
 }
 
 func setLogLevel(level string) {

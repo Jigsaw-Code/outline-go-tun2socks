@@ -25,7 +25,7 @@ ANDROID_OUTLINE_BUILD_CMD="$(ANDROID_BUILD_CMD) $(IMPORT_PATH)/outline/android $
 ANDROID_INTRA_BUILD_CMD="$(ANDROID_BUILD_CMD) $(IMPORT_PATH)/intra $(IMPORT_PATH)/tunnel $(IMPORT_PATH)/tunnel/intra"
 IOS_BUILD_CMD="GO111MODULE=off $(GOBIND) -a -ldflags $(LDFLAGS) -bundleid org.outline.tun2socks -target=ios/arm,ios/arm64 -tags ios -o $(IOS_ARTIFACT) $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks"
 MACOS_BUILD_CMD="GO111MODULE=off ./tools/$(GOBIND) -a -ldflags $(LDFLAGS) -bundleid org.outline.tun2socks -target=ios/amd64 -tags ios -o $(MACOS_ARTIFACT) $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks"
-WINDOWS_BUILD_CMD="$(XGOCMD) -ldflags $(XGO_LDFLAGS)  --targets=windows/386 -dest $(WINDOWS_BUILDDIR) $(ELECTRON_PATH)"
+WINDOWS_BUILD_CMD="$(XGOCMD) -ldflags $(XGO_LDFLAGS) --targets=windows/386 -dest $(WINDOWS_BUILDDIR) $(ELECTRON_PATH)"
 LINUX_BUILD_CMD="$(XGOCMD) -ldflags $(XGO_LDFLAGS) --targets=linux/amd64 -dest $(LINUX_BUILDDIR) $(ELECTRON_PATH)"
 
 define build
