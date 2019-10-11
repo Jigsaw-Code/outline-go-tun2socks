@@ -16,8 +16,10 @@ package tun2socks
 
 import (
 	"runtime/debug"
+	"strings"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
@@ -38,7 +40,7 @@ func init() {
 //
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, alwaysSplitHTTPS bool, listener tunnel.IntraListener) (tunnel.Tunnel, error) {
+func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, alwaysSplitHTTPS bool, listener tunnel.IntraListener) (tunnel.IntraTunnel, error) {
 	tun, err := tunnel.MakeTunFile(fd)
 	if err != nil {
 		return nil, err
@@ -49,4 +51,17 @@ func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, alwaysSplitHTTPS
 	}
 	go tunnel.ProcessInputPackets(t, tun)
 	return t, nil
+}
+
+// NewDoHTransport returns a DNSTransport that connects to the specified DoH server.
+// `url` is the URL of a DoH server (no template, POST-only).  If it is nonempty, it
+// overrides `udpdns` and `tcpdns`.  `ips` is an optional comma-separated list of
+// IP addresses for the server.  (This wrapper is required because gomobile can't
+// make bindings for []string.)
+func NewDoHTransport(url string, ips string, listener tunnel.IntraListener) (intra.DNSTransport, error) {
+	split := []string{}
+	if len(ips) > 0 {
+		split = strings.Split(ips, ",")
+	}
+	return intra.NewDoHTransport(url, split, listener)
 }

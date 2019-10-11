@@ -24,16 +24,30 @@ import (
 	"github.com/eycorsican/go-tun2socks/core"
 )
 
-// IntraListener receives usage statistics when a UDP or TCP socket is closed.
+// IntraListener receives usage statistics when a UDP or TCP socket is closed,
+// or a DNS query is completed.
 type IntraListener interface {
 	intra.UDPListener
 	intra.TCPListener
+	intra.DNSListener
+}
+
+// IntraTunnel represents an Intra session.
+type IntraTunnel interface {
+	Tunnel
+	// Get the DNSTransport (default: nil).
+	GetDNS() intra.DNSTransport
+	// Set the DNSTransport.  Once set, the tunnel will send DNS queries to
+	// this transport instead of forwarding them to `udpdns`/`tcpdns`.  The
+	// transport can be changed at any time during operation, but must not be nil.
+	SetDNS(intra.DNSTransport)
 }
 
 type intratunnel struct {
 	*tunnel
-	tcp core.TCPConnHandler
-	udp core.UDPConnHandler
+	tcp intra.TCPHandler
+	udp intra.UDPHandler
+	dns intra.DNSTransport
 }
 
 // NewIntraTunnel creates a connected Intra session.
@@ -42,7 +56,8 @@ type intratunnel struct {
 //    This will normally be a reserved or remote IP address, port 53.
 // `udpdns` and `tcpdns` are the actual location of the DNS server in use.
 //    These will normally be localhost with a high-numbered port.
-func NewIntraTunnel(fakedns, udpdns, tcpdns string, tunWriter io.WriteCloser, alwaysSplitHTTPS bool, listener IntraListener) (Tunnel, error) {
+// TODO: Remove `udpdns` and `tcpdns` once DNSTransport is fully rolled out.
+func NewIntraTunnel(fakedns, udpdns, tcpdns string, tunWriter io.WriteCloser, alwaysSplitHTTPS bool, listener IntraListener) (IntraTunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("Must provide a valid TUN writer")
 	}
@@ -84,4 +99,14 @@ func (t *intratunnel) registerConnectionHandlers(fakedns, udpdns, tcpdns string,
 	t.tcp = intra.NewTCPHandler(*tcpfakedns, *tcptruedns, alwaysSplitHTTPS, listener)
 	core.RegisterTCPConnHandler(t.tcp)
 	return nil
+}
+
+func (t *intratunnel) SetDNS(dns intra.DNSTransport) {
+	t.dns = dns
+	t.udp.SetDNS(dns)
+	t.tcp.SetDNS(dns)
+}
+
+func (t *intratunnel) GetDNS() intra.DNSTransport {
+	return t.dns
 }
