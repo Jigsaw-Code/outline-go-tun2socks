@@ -1,4 +1,18 @@
-package intra
+// Copyright 2019 The Outline Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package doh
 
 import (
 	"bytes"
@@ -28,7 +42,7 @@ func init() {
 
 // Check that the constructor works.
 func TestNewTransport(t *testing.T) {
-	_, err := NewDoHTransport(testURL, ips, nil)
+	_, err := NewTransport(testURL, ips, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -36,11 +50,11 @@ func TestNewTransport(t *testing.T) {
 
 // Check that the constructor rejects unsupported URLs.
 func TestBadUrl(t *testing.T) {
-	_, err := NewDoHTransport("ftp://www.example.com", nil, nil)
+	_, err := NewTransport("ftp://www.example.com", nil, nil)
 	if err == nil {
 		t.Error("Expected error")
 	}
-	_, err = NewDoHTransport("https://www.example", nil, nil)
+	_, err = NewTransport("https://www.example", nil, nil)
 	if err == nil {
 		t.Error("Expected error")
 	}
@@ -49,7 +63,7 @@ func TestBadUrl(t *testing.T) {
 // Check for failure when the query is too short to be valid.
 func TestShortQuery(t *testing.T) {
 	var qerr *queryError
-	doh, _ := NewDoHTransport(testURL, ips, nil)
+	doh, _ := NewTransport(testURL, ips, nil)
 	_, err := doh.Query([]byte{})
 	if err == nil {
 		t.Error("Empty query should fail")
@@ -86,7 +100,7 @@ func TestQueryIntegration(t *testing.T) {
 		0, 1, // QCLASS = IN (Internet)
 	}
 
-	doh, err := NewDoHTransport(testURL, ips, nil)
+	doh, err := NewTransport(testURL, ips, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +140,7 @@ func (r *testRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 
 // Check that a DNS query is converted correctly into an HTTP query.
 func TestRequest(t *testing.T) {
-	doh, _ := NewDoHTransport(testURL, ips, nil)
+	doh, _ := NewTransport(testURL, ips, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -155,7 +169,7 @@ func TestRequest(t *testing.T) {
 
 // Check that a DOH response is returned correctly.
 func TestResponse(t *testing.T) {
-	doh, _ := NewDoHTransport(testURL, ips, nil)
+	doh, _ := NewTransport(testURL, ips, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -187,7 +201,7 @@ func TestResponse(t *testing.T) {
 // Simulate an empty response.  (This is not a compliant server
 // behavior.)
 func TestEmptyResponse(t *testing.T) {
-	doh, _ := NewDoHTransport(testURL, ips, nil)
+	doh, _ := NewTransport(testURL, ips, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -218,7 +232,7 @@ func TestEmptyResponse(t *testing.T) {
 
 // Simulate a non-200 HTTP response code.
 func TestHTTPError(t *testing.T) {
-	doh, _ := NewDoHTransport(testURL, ips, nil)
+	doh, _ := NewTransport(testURL, ips, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -248,7 +262,7 @@ func TestHTTPError(t *testing.T) {
 
 // Simulate an HTTP query error.
 func TestSendFailed(t *testing.T) {
-	doh, _ := NewDoHTransport(testURL, ips, nil)
+	doh, _ := NewTransport(testURL, ips, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -268,11 +282,11 @@ func TestSendFailed(t *testing.T) {
 }
 
 type fakeListener struct {
-	DNSListener
-	summary *DNSSummary
+	Listener
+	summary *Summary
 }
 
-func (l *fakeListener) OnDNSTransaction(s *DNSSummary) {
+func (l *fakeListener) OnTransaction(s *Summary) {
 	l.summary = s
 }
 
@@ -300,7 +314,7 @@ func (a fakeAddr) Network() string {
 // Check that the DNSListener is called with a correct summary.
 func TestListener(t *testing.T) {
 	listener := &fakeListener{}
-	doh, _ := NewDoHTransport(testURL, ips, listener)
+	doh, _ := NewTransport(testURL, ips, listener)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -368,7 +382,7 @@ func makePair() (io.ReadWriteCloser, io.ReadWriteCloser) {
 }
 
 type fakeTransport struct {
-	DNSTransport
+	Transport
 	query    chan []byte
 	response chan []byte
 	err      error

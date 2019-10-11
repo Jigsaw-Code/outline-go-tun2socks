@@ -20,8 +20,10 @@ import (
 	"net"
 	"time"
 
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra"
 	"github.com/eycorsican/go-tun2socks/core"
+
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/doh"
 )
 
 // IntraListener receives usage statistics when a UDP or TCP socket is closed,
@@ -29,25 +31,25 @@ import (
 type IntraListener interface {
 	intra.UDPListener
 	intra.TCPListener
-	intra.DNSListener
+	doh.Listener
 }
 
 // IntraTunnel represents an Intra session.
 type IntraTunnel interface {
 	Tunnel
 	// Get the DNSTransport (default: nil).
-	GetDNS() intra.DNSTransport
+	GetDNS() doh.Transport
 	// Set the DNSTransport.  Once set, the tunnel will send DNS queries to
 	// this transport instead of forwarding them to `udpdns`/`tcpdns`.  The
 	// transport can be changed at any time during operation, but must not be nil.
-	SetDNS(intra.DNSTransport)
+	SetDNS(doh.Transport)
 }
 
 type intratunnel struct {
 	*tunnel
 	tcp intra.TCPHandler
 	udp intra.UDPHandler
-	dns intra.DNSTransport
+	dns doh.Transport
 }
 
 // NewIntraTunnel creates a connected Intra session.
@@ -101,12 +103,12 @@ func (t *intratunnel) registerConnectionHandlers(fakedns, udpdns, tcpdns string,
 	return nil
 }
 
-func (t *intratunnel) SetDNS(dns intra.DNSTransport) {
+func (t *intratunnel) SetDNS(dns doh.Transport) {
 	t.dns = dns
 	t.udp.SetDNS(dns)
 	t.tcp.SetDNS(dns)
 }
 
-func (t *intratunnel) GetDNS() intra.DNSTransport {
+func (t *intratunnel) GetDNS() doh.Transport {
 	return t.dns
 }

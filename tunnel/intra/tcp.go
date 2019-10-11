@@ -23,42 +23,40 @@ import (
 
 	"github.com/eycorsican/go-tun2socks/common/log"
 	"github.com/eycorsican/go-tun2socks/core"
+
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/doh"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/split"
 )
 
+// TCPHandler is a core TCP handler that also supports DOH.
 type TCPHandler interface {
 	core.TCPConnHandler
-	SetDNS(DNSTransport)
+	SetDNS(doh.Transport)
 }
 
 type tcpHandler struct {
 	TCPHandler
 	fakedns          net.TCPAddr
 	truedns          net.TCPAddr
-	dns              atomicdns
+	dns              doh.Atomic
 	alwaysSplitHTTPS bool
 	listener         TCPListener
 }
 
-// Usage summary for each TCP socket, reported when it is closed.
+// TCPSocketSummary provides information about each TCP socket, reported when it is closed.
 type TCPSocketSummary struct {
-	DownloadBytes int64       // Total bytes downloaded.
-	UploadBytes   int64       // Total bytes uploaded.
-	Duration      int32       // Duration in seconds.
-	ServerPort    int16       // The server port.  All values except 80, 443, and 0 are set to -1.
-	Synack        int32       // TCP handshake latency (ms)
-	Retry         *RetryStats // Non-nil if a retry occurred.
+	DownloadBytes int64 // Total bytes downloaded.
+	UploadBytes   int64 // Total bytes uploaded.
+	Duration      int32 // Duration in seconds.
+	ServerPort    int16 // The server port.  All values except 80, 443, and 0 are set to -1.
+	Synack        int32 // TCP handshake latency (ms)
+	// Retry is non-nil if retry was possible.  Retry.Split is non-zero if a retry occurred.
+	Retry *split.RetryStats
 }
 
+// TCPListener is notified when a socket closes.
 type TCPListener interface {
 	OnTCPSocketClosed(*TCPSocketSummary)
-}
-
-// DuplexConn represents a bidirectional stream socket.
-type DuplexConn interface {
-	net.Conn
-	io.ReaderFrom
-	CloseWrite() error
-	CloseRead() error
 }
 
 // NewTCPHandler returns a TCP forwarder with Intra-style behavior.
@@ -75,21 +73,21 @@ func NewTCPHandler(fakedns, truedns net.TCPAddr, alwaysSplitHTTPS bool, listener
 }
 
 // TODO: Propagate TCP RST using local.Abort(), on appropriate errors.
-func (h *tcpHandler) handleUpload(local core.TCPConn, remote DuplexConn, upload chan int64) {
+func (h *tcpHandler) handleUpload(local core.TCPConn, remote split.DuplexConn, upload chan int64) {
 	bytes, _ := remote.ReadFrom(local)
 	local.CloseRead()
 	remote.CloseWrite()
 	upload <- bytes
 }
 
-func (h *tcpHandler) handleDownload(local core.TCPConn, remote DuplexConn) (bytes int64, err error) {
+func (h *tcpHandler) handleDownload(local core.TCPConn, remote split.DuplexConn) (bytes int64, err error) {
 	bytes, err = io.Copy(local, remote)
 	local.CloseWrite()
 	remote.CloseRead()
 	return
 }
 
-func (h *tcpHandler) forward(local net.Conn, remote DuplexConn, summary *TCPSocketSummary) {
+func (h *tcpHandler) forward(local net.Conn, remote split.DuplexConn, summary *TCPSocketSummary) {
 	localtcp := local.(core.TCPConn)
 	upload := make(chan int64)
 	start := time.Now()
@@ -124,7 +122,7 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 	if target.IP.Equal(h.fakedns.IP) && target.Port == h.fakedns.Port {
 		dns := h.dns.Load()
 		if dns != nil {
-			go Accept(dns, conn)
+			go doh.Accept(dns, conn)
 			return nil
 		}
 		target = &h.truedns
@@ -132,14 +130,15 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 	var summary TCPSocketSummary
 	summary.ServerPort = filteredPort(target)
 	start := time.Now()
-	var c DuplexConn
+	var c split.DuplexConn
 	var err error
 	// TODO: Cancel dialing if c is closed.
 	if summary.ServerPort == 443 {
 		if h.alwaysSplitHTTPS {
-			c, err = DialWithSplit(target)
+			c, err = split.DialWithSplit(target)
 		} else {
-			c, err = DialWithSplitRetry(target, DefaultTimeout, &summary)
+			summary.Retry = &split.RetryStats{}
+			c, err = split.DialWithSplitRetry(target, split.DefaultTimeout, summary.Retry)
 		}
 	} else {
 		c, err = net.DialTCP(target.Network(), nil, target)
@@ -153,6 +152,6 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 	return nil
 }
 
-func (h *tcpHandler) SetDNS(dns DNSTransport) {
+func (h *tcpHandler) SetDNS(dns doh.Transport) {
 	h.dns.Store(dns)
 }

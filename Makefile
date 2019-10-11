@@ -22,7 +22,7 @@ LINUX_BUILDDIR=$(BUILDDIR)/linux
 
 ANDROID_BUILD_CMD="GO111MODULE=off $(GOBIND) -a -ldflags $(ANDROID_LDFLAGS) -target=android -tags android -work -o $(ANDROID_ARTIFACT)"
 ANDROID_OUTLINE_BUILD_CMD="$(ANDROID_BUILD_CMD) $(IMPORT_PATH)/outline/android $(IMPORT_PATH)/outline/shadowsocks"
-ANDROID_INTRA_BUILD_CMD="$(ANDROID_BUILD_CMD) $(IMPORT_PATH)/intra $(IMPORT_PATH)/tunnel $(IMPORT_PATH)/tunnel/intra"
+ANDROID_INTRA_BUILD_CMD="$(ANDROID_BUILD_CMD) $(IMPORT_PATH)/intra $(IMPORT_PATH)/tunnel $(IMPORT_PATH)/tunnel/intra $(IMPORT_PATH)/tunnel/intra/doh $(IMPORT_PATH)/tunnel/intra/split"
 IOS_BUILD_CMD="GO111MODULE=off $(GOBIND) -a -ldflags $(LDFLAGS) -bundleid org.outline.tun2socks -target=ios/arm,ios/arm64 -tags ios -o $(IOS_ARTIFACT) $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks"
 MACOS_BUILD_CMD="GO111MODULE=off ./tools/$(GOBIND) -a -ldflags $(LDFLAGS) -bundleid org.outline.tun2socks -target=ios/amd64 -tags ios -o $(MACOS_ARTIFACT) $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks"
 WINDOWS_BUILD_CMD="$(XGOCMD) -ldflags $(XGO_LDFLAGS) -tags $(XGO_BUILD_TAGS)  --targets=windows/386 -dest $(WINDOWS_BUILDDIR) $(TUN2SOCKS_SRC_PATH)/cmd/tun2socks"
