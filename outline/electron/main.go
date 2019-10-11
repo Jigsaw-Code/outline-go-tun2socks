@@ -38,18 +38,19 @@ const (
 )
 
 var args struct {
-	tunAddr       *string
-	tunGw         *string
-	tunMask       *string
-	tunName       *string
-	tunDNS        *string
-	proxyHost     *string
-	proxyPort     *int
-	proxyPassword *string
-	proxyCipher   *string
-	logLevel      *string
-	dnsFallback   *bool
-	version       *bool
+	tunAddr           *string
+	tunGw             *string
+	tunMask           *string
+	tunName           *string
+	tunDNS            *string
+	proxyHost         *string
+	proxyPort         *int
+	proxyPassword     *string
+	proxyCipher       *string
+	logLevel          *string
+	checkConnectivity *bool
+	dnsFallback       *bool
+	version           *bool
 }
 var version string // Populated at build time through `-X main.version=...`
 var lwipWriter io.Writer
@@ -66,6 +67,7 @@ func main() {
 	args.proxyCipher = flag.String("proxyCipher", "chacha20-ietf-poly1305", "Shadowsocks proxy encryption cipher")
 	args.logLevel = flag.String("logLevel", "info", "Logging level: debug|info|warn|error|none")
 	args.dnsFallback = flag.Bool("dnsFallback", false, "Enable DNS fallback over TCP (overrides the UDP handler).")
+	args.checkConnectivity = flag.Bool("checkConnectivity", false, "Check the proxy TCP and UDP connectivity; exit on failure.")
 	args.version = flag.Bool("version", false, "Print the version and exit.")
 
 	flag.Parse()
@@ -92,15 +94,18 @@ func main() {
 		os.Exit(oss.Unexpected)
 	}
 
-	// Check the proxy connectivity
-	code, err := oss.CheckConnectivity(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher)
-	if err != nil {
-		log.Errorf("Failed to perform connectivity checks: %v", err)
-		os.Exit(oss.Unexpected)
-	}
-	if !(code == oss.NoError || code == oss.UDPConnectivity) {
-		log.Errorf("Connectivity checks failed with code %v", code)
-		os.Exit(code)
+	connErrCode := oss.NoError
+	if *args.checkConnectivity {
+		// Check the proxy connectivity
+		connErrCode, err := oss.CheckConnectivity(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher)
+		if err != nil {
+			log.Errorf("Failed to perform connectivity checks: %v", err)
+			os.Exit(oss.Unexpected)
+		}
+		if !(connErrCode == oss.NoError || connErrCode == oss.UDPConnectivity) {
+			log.Errorf("Connectivity checks failed with code %v", connErrCode)
+			os.Exit(connErrCode)
+		}
 	}
 
 	// Open TUN device
@@ -116,7 +121,7 @@ func main() {
 	// Register TCP and UDP connection handlers
 	core.RegisterTCPConnHandler(
 		shadowsocks.NewTCPHandler(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher))
-	if *args.dnsFallback || code == oss.UDPConnectivity {
+	if *args.dnsFallback || connErrCode == oss.UDPConnectivity {
 		// UDP connectivity not supported, fall back to DNS over TCP.
 		core.RegisterUDPConnHandler(dnsfallback.NewUDPHandler())
 	} else {
