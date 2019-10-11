@@ -1,4 +1,18 @@
-package intra
+// Copyright 2019 The Outline Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package split
 
 import (
 	"errors"
@@ -46,8 +60,7 @@ type retrier struct {
 	// Flags indicating whether the caller has called CloseRead and CloseWrite.
 	readCloseFlag  chan struct{}
 	writeCloseFlag chan struct{}
-	stats          RetryStats
-	summary        *TCPSocketSummary
+	stats          *RetryStats
 }
 
 // Helper functions for reading flags.
@@ -101,13 +114,20 @@ const DefaultTimeout time.Duration = 0
 // reply.  Like net.Conn, it is intended for two-threaded use, with one thread calling
 // Read and CloseRead, and another calling Write, ReadFrom, and CloseWrite.
 // synackTimeout controls how long to wait for the TCP handshake to complete.
-func DialWithSplitRetry(addr *net.TCPAddr, synackTimeout time.Duration, summary *TCPSocketSummary) (DuplexConn, error) {
+// If stats is non-nil, it will be populated with retry-related information.
+func DialWithSplitRetry(addr *net.TCPAddr, synackTimeout time.Duration, stats *RetryStats) (DuplexConn, error) {
 	before := time.Now()
 	conn, err := (&net.Dialer{Timeout: synackTimeout}).Dial(addr.Network(), addr.String())
 	if err != nil {
 		return nil, err
 	}
 	after := time.Now()
+
+	if stats == nil {
+		// This is a dummy stats object that will be written but never read.  Its purpose
+		// is to avoid the need for nil checks at each point where stats are updated.
+		stats = &RetryStats{}
+	}
 
 	r := &retrier{
 		addr:              addr,
@@ -116,7 +136,7 @@ func DialWithSplitRetry(addr *net.TCPAddr, synackTimeout time.Duration, summary 
 		retryCompleteFlag: make(chan struct{}),
 		readCloseFlag:     make(chan struct{}),
 		writeCloseFlag:    make(chan struct{}),
-		summary:           summary,
+		stats:             stats,
 	}
 
 	return r, nil
@@ -157,10 +177,6 @@ func (r *retrier) retry(buf []byte) (n int, err error) {
 	r.conn = newConn
 	first, second := splitHello(r.hello)
 	r.stats.Split = int16(len(first))
-	// Set Retry to a non-nil value, indicating that a retry occurred.
-	if r.summary != nil {
-		r.summary.Retry = &r.stats
-	}
 	if _, err = r.conn.Write(first); err != nil {
 		return
 	}

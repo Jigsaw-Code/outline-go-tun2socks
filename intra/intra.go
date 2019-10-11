@@ -19,7 +19,7 @@ import (
 	"strings"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/doh"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
@@ -58,10 +58,10 @@ func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, alwaysSplitHTTPS
 // overrides `udpdns` and `tcpdns`.  `ips` is an optional comma-separated list of
 // IP addresses for the server.  (This wrapper is required because gomobile can't
 // make bindings for []string.)
-func NewDoHTransport(url string, ips string, listener tunnel.IntraListener) (intra.DNSTransport, error) {
+func NewDoHTransport(url string, ips string, listener tunnel.IntraListener) (doh.Transport, error) {
 	split := []string{}
 	if len(ips) > 0 {
 		split = strings.Split(ips, ",")
 	}
-	return intra.NewDoHTransport(url, split, listener)
+	return doh.NewTransport(url, split, listener)
 }

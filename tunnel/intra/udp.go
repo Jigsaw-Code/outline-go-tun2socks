@@ -25,15 +25,18 @@ import (
 
 	"github.com/eycorsican/go-tun2socks/common/log"
 	"github.com/eycorsican/go-tun2socks/core"
+
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/doh"
 )
 
-// Summary of a non-DNS UDP association, reported when it is discarded.
+// UDPSocketSummary describes a non-DNS UDP association, reported when it is discarded.
 type UDPSocketSummary struct {
 	UploadBytes   int64 // Amount uploaded (bytes)
 	DownloadBytes int64 // Amount downloaded (bytes)
 	Duration      int32 // How long the socket was open (seconds)
 }
 
+// UDPListener is notified when a non-DNS UDP association is discarded.
 type UDPListener interface {
 	OnUDPSocketClosed(*UDPSocketSummary)
 }
@@ -52,9 +55,10 @@ func makeTracker(conn *net.UDPConn) *tracker {
 	return &tracker{conn, time.Now(), 0, 0, false, 0}
 }
 
+// UDPHandler adds DOH support to the base UDPConnHandler interface.
 type UDPHandler interface {
 	core.UDPConnHandler
-	SetDNS(dns DNSTransport)
+	SetDNS(dns doh.Transport)
 }
 
 type udpHandler struct {
@@ -65,7 +69,7 @@ type udpHandler struct {
 	udpConns map[core.UDPConn]*tracker
 	fakedns  net.UDPAddr
 	truedns  net.UDPAddr
-	dns      atomicdns
+	dns      doh.Atomic
 	listener UDPListener
 }
 
@@ -155,7 +159,7 @@ func (h *udpHandler) Connect(conn core.UDPConn, target *net.UDPAddr) error {
 	return nil
 }
 
-func (h *udpHandler) doDoh(dns DNSTransport, t *tracker, conn core.UDPConn, data []byte) {
+func (h *udpHandler) doDoh(dns doh.Transport, t *tracker, conn core.UDPConn, data []byte) {
 	resp, err := dns.Query(data)
 	if err == nil {
 		conn.WriteFrom(resp, &h.fakedns)
@@ -231,6 +235,6 @@ func (h *udpHandler) Close(conn core.UDPConn) {
 	}
 }
 
-func (h *udpHandler) SetDNS(dns DNSTransport) {
+func (h *udpHandler) SetDNS(dns doh.Transport) {
 	h.dns.Store(dns)
 }

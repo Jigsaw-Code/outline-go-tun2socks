@@ -1,4 +1,18 @@
-package intra
+// Copyright 2019 The Outline Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package doh
 
 // TODO: Split doh and retrier into their own packages.
 
@@ -17,7 +31,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/ipmap"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/doh/ipmap"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/split"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
@@ -36,8 +51,8 @@ const (
 	InternalError
 )
 
-// DNSSummary is a summary of a DNS transaction, reported when it is complete.
-type DNSSummary struct {
+// Summary is a summary of a DNS transaction, reported when it is complete.
+type Summary struct {
 	Latency  float64 // Response (or failure) latency in seconds
 	Query    []byte
 	Response []byte
@@ -45,14 +60,14 @@ type DNSSummary struct {
 	Status   int
 }
 
-// DNSListener receives DNSSummaries.
-type DNSListener interface {
-	OnDNSTransaction(*DNSSummary)
+// Listener receives Summaries.
+type Listener interface {
+	OnTransaction(*Summary)
 }
 
-// DNSTransport represents a query transport.  This interface is exported by gobind,
+// Transport represents a DNS query transport.  This interface is exported by gobind,
 // so it has to be very simple.
-type DNSTransport interface {
+type Transport interface {
 	// Given a DNS query (including ID), returns a DNS response with matching
 	// ID, or an error if no response was received.
 	Query(q []byte) ([]byte, error)
@@ -62,12 +77,12 @@ type DNSTransport interface {
 
 // TODO: Keep a context here so that queries can be canceled.
 type transport struct {
-	DNSTransport
+	Transport
 	url      string
 	port     int
 	ips      ipmap.IPMap
 	client   http.Client
-	listener DNSListener
+	listener Listener
 }
 
 // Wait up to three seconds for the TCP handshake to complete.
@@ -94,7 +109,7 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 	confirmed := ips.Confirmed()
 	if confirmed != nil {
 		log.Debugf("Trying confirmed IP %s for addr %s", confirmed.String(), addr)
-		if conn, err = DialWithSplitRetry(tcpaddr(confirmed), tcpTimeout, nil); err == nil {
+		if conn, err = split.DialWithSplitRetry(tcpaddr(confirmed), tcpTimeout, nil); err == nil {
 			log.Infof("Confirmed IP %s worked", confirmed.String())
 			return conn, nil
 		}
@@ -108,7 +123,7 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 			// Don't try this IP twice.
 			continue
 		}
-		if conn, err = DialWithSplitRetry(tcpaddr(ip), tcpTimeout, nil); err == nil {
+		if conn, err = split.DialWithSplitRetry(tcpaddr(ip), tcpTimeout, nil); err == nil {
 			log.Infof("Found working IP: %s", ip.String())
 			return conn, nil
 		}
@@ -120,7 +135,7 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 // This is a POST-only DoH implementation, so the DoH template should be a URL.
 // addrs is a list of domains or IP addresses to use as fallback, if the hostname
 // lookup fails or returns non-working addresses.
-func NewDoHTransport(rawurl string, addrs []string, listener DNSListener) (DNSTransport, error) {
+func NewTransport(rawurl string, addrs []string, listener Listener) (Transport, error) {
 	parsedurl, err := url.Parse(rawurl)
 	if err != nil {
 		return nil, err
@@ -253,7 +268,7 @@ func (t *transport) Query(q []byte) ([]byte, error) {
 		if errors.As(err, &qerr) {
 			status = qerr.status
 		}
-		t.listener.OnDNSTransaction(&DNSSummary{
+		t.listener.OnTransaction(&Summary{
 			Latency:  latency.Seconds(),
 			Query:    q,
 			Response: response,
@@ -269,7 +284,7 @@ func (t *transport) GetURL() string {
 }
 
 // Perform a query using the transport, and send the response to the writer.
-func forwardQuery(t DNSTransport, q []byte, c io.Writer) error {
+func forwardQuery(t Transport, q []byte, c io.Writer) error {
 	resp, err := t.Query(q)
 	if err != nil {
 		return err
@@ -295,7 +310,7 @@ func forwardQuery(t DNSTransport, q []byte, c io.Writer) error {
 
 // Perform a query using the transport, send the response to the writer,
 // and close the writer if there was an error.
-func forwardQueryAndCheck(t DNSTransport, q []byte, c io.WriteCloser) {
+func forwardQueryAndCheck(t Transport, q []byte, c io.WriteCloser) {
 	if err := forwardQuery(t, q, c); err != nil {
 		log.Warnf("Query forwarding failed: %v", err)
 		c.Close()
@@ -304,7 +319,7 @@ func forwardQueryAndCheck(t DNSTransport, q []byte, c io.WriteCloser) {
 
 // Accept a DNS-over-TCP socket from a stub resolver, and connect the socket
 // to this DNSTransport.
-func Accept(t DNSTransport, c io.ReadWriteCloser) {
+func Accept(t Transport, c io.ReadWriteCloser) {
 	qlbuf := make([]byte, 2)
 	for {
 		n, err := c.Read(qlbuf)

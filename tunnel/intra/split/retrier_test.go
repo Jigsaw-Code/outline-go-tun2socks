@@ -1,4 +1,18 @@
-package intra
+// Copyright 2019 The Outline Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package split
 
 import (
 	"bytes"
@@ -14,7 +28,7 @@ type setup struct {
 	clientSide     DuplexConn
 	serverSide     *net.TCPConn
 	serverReceived []byte
-	summary        *TCPSocketSummary
+	stats          *RetryStats
 }
 
 func makeSetup(t *testing.T) *setup {
@@ -31,8 +45,8 @@ func makeSetup(t *testing.T) *setup {
 	if !ok {
 		t.Error("Server isn't TCP?")
 	}
-	var summary TCPSocketSummary
-	clientSide, err := DialWithSplitRetry(serverAddr, DefaultTimeout, &summary)
+	var stats RetryStats
+	clientSide, err := DialWithSplitRetry(serverAddr, DefaultTimeout, &stats)
 	if err != nil {
 		t.Error(err)
 	}
@@ -40,7 +54,7 @@ func makeSetup(t *testing.T) *setup {
 	if err != nil {
 		t.Error(err)
 	}
-	return &setup{t, server, clientSide, serverSide, nil, &summary}
+	return &setup{t, server, clientSide, serverSide, nil, &stats}
 }
 
 const BUFSIZE = 256
@@ -162,18 +176,14 @@ func (s *setup) confirmRetry() {
 	<-done
 }
 
-func (s *setup) checkNoStats() {
-	if s.summary.Retry != nil {
-		s.t.Error("Retry stats should be nil")
+func (s *setup) checkNoSplit() {
+	if s.stats.Split > 0 {
+		s.t.Error("Retry should not have occurred")
 	}
 }
 
 func (s *setup) checkStats(bytes int32, chunks int16, timeout bool) {
-	r := s.summary.Retry
-	if r == nil {
-		s.t.Error("Missing stats")
-		return
-	}
+	r := s.stats
 	if r.Bytes != bytes {
 		s.t.Errorf("Expected %d bytes, got %d", bytes, r.Bytes)
 	}
@@ -195,7 +205,7 @@ func TestNormalConnection(t *testing.T) {
 	s.closeReadUp()
 	s.closeWriteUp()
 	s.close()
-	s.checkNoStats()
+	s.checkNoSplit()
 }
 
 func TestFinRetry(t *testing.T) {
@@ -259,7 +269,7 @@ func TestDisappearingServer(t *testing.T) {
 	}
 	s.clientSide.CloseRead()
 	s.clientSide.CloseWrite()
-	s.checkNoStats()
+	s.checkNoSplit()
 }
 
 func TestSequentialClose(t *testing.T) {
@@ -269,7 +279,7 @@ func TestSequentialClose(t *testing.T) {
 	s.sendDown()
 	s.closeWriteDown()
 	s.close()
-	s.checkNoStats()
+	s.checkNoSplit()
 }
 
 func TestBackwardsUse(t *testing.T) {
@@ -279,7 +289,7 @@ func TestBackwardsUse(t *testing.T) {
 	s.sendUp()
 	s.closeWriteUp()
 	s.close()
-	s.checkNoStats()
+	s.checkNoSplit()
 }
 
 // Regression test for an issue in which the initial handshake timeout
@@ -293,5 +303,5 @@ func TestIdle(t *testing.T) {
 	// Try to send down some more data.
 	s.sendDown()
 	s.close()
-	s.checkNoStats()
+	s.checkNoSplit()
 }
