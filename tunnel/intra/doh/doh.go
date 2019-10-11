@@ -14,8 +14,6 @@
 
 package doh
 
-// TODO: Split doh and retrier into their own packages.
-
 import (
 	"bytes"
 	"encoding/binary"
