@@ -40,12 +40,12 @@ func init() {
 //
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, alwaysSplitHTTPS bool, listener tunnel.IntraListener) (tunnel.IntraTunnel, error) {
+func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, dohdns doh.Transport, listener tunnel.IntraListener) (tunnel.IntraTunnel, error) {
 	tun, err := tunnel.MakeTunFile(fd)
 	if err != nil {
 		return nil, err
 	}
-	t, err := tunnel.NewIntraTunnel(fakedns, udpdns, tcpdns, tun, alwaysSplitHTTPS, listener)
+	t, err := tunnel.NewIntraTunnel(fakedns, udpdns, tcpdns, dohdns, tun, listener)
 	if err != nil {
 		return nil, err
 	}
