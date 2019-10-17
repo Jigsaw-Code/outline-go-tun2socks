@@ -27,6 +27,7 @@ import (
 	oss "github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/shadowsocks"
 	"github.com/eycorsican/go-tun2socks/common/log"
+	_ "github.com/eycorsican/go-tun2socks/common/log/simple" // Register a simple logger.
 	"github.com/eycorsican/go-tun2socks/core"
 	"github.com/eycorsican/go-tun2socks/proxy/dnsfallback"
 	"github.com/eycorsican/go-tun2socks/tun"
@@ -83,8 +84,8 @@ func main() {
 	if *args.proxyHost == "" {
 		log.Errorf("Must provide a Shadowsocks proxy host name or IP address")
 		os.Exit(oss.Unexpected)
-	} else if *args.proxyPort <= 0 {
-		log.Errorf("Must provide a valid Shadowsocks proxy port [1:65355]")
+	} else if *args.proxyPort <= 0 || *args.proxyPort > 65535 {
+		log.Errorf("Must provide a valid Shadowsocks proxy port [1:65535]")
 		os.Exit(oss.Unexpected)
 	} else if *args.proxyPassword == "" {
 		log.Errorf("Must provide a Shadowsocks proxy password")
@@ -97,13 +98,14 @@ func main() {
 	connErrCode := oss.NoError
 	if *args.checkConnectivity {
 		// Check the proxy connectivity
-		connErrCode, err := oss.CheckConnectivity(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher)
+		var err error
+		connErrCode, err = oss.CheckConnectivity(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher)
 		if err != nil {
 			log.Errorf("Failed to perform connectivity checks: %v", err)
 			os.Exit(oss.Unexpected)
 		}
+		log.Debugf("Connectivity checks error code: %v", connErrCode)
 		if !(connErrCode == oss.NoError || connErrCode == oss.UDPConnectivity) {
-			log.Errorf("Connectivity checks failed with code %v", connErrCode)
 			os.Exit(connErrCode)
 		}
 	}
@@ -113,7 +115,7 @@ func main() {
 	tunDevice, err := tun.OpenTunDevice(*args.tunName, *args.tunAddr, *args.tunGw, *args.tunMask, dnsResolvers)
 	if err != nil {
 		log.Errorf("Failed to open TUN device: %v", err)
-		os.Exit(oss.Unexpected)
+		os.Exit(oss.SystemMisconfigured)
 	}
 	// Output packets to TUN device
 	core.RegisterOutputFn(tunDevice.Write)
@@ -123,6 +125,7 @@ func main() {
 		shadowsocks.NewTCPHandler(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher))
 	if *args.dnsFallback || connErrCode == oss.UDPConnectivity {
 		// UDP connectivity not supported, fall back to DNS over TCP.
+		log.Debugf("Registering DNS fallback UDP handler")
 		core.RegisterUDPConnHandler(dnsfallback.NewUDPHandler())
 	} else {
 		core.RegisterUDPConnHandler(
