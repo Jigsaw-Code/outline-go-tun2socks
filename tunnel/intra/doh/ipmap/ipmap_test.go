@@ -105,7 +105,7 @@ func TestConfirmed(t *testing.T) {
 	}
 
 	ips := s.GetAll()
-	s.Confirm(ips[0].String())
+	s.Confirm(ips[0])
 	if !ips[0].Equal(s.Confirmed()) {
 		t.Error("Confirmation failed")
 	}
@@ -121,7 +121,7 @@ func TestConfirmNew(t *testing.T) {
 	s := m.Get("example")
 	s.Add("192.0.2.1")
 	// Confirm a new address.
-	s.Confirm("192.0.2.2")
+	s.Confirm(net.ParseIP("192.0.2.2"))
 	if s.Confirmed() == nil || s.Confirmed().String() != "192.0.2.2" {
 		t.Error("Confirmation failed")
 	}
@@ -135,7 +135,7 @@ func TestDisconfirmMismatch(t *testing.T) {
 	m := NewIPMap()
 	s := m.Get("www.google.com")
 	ips := s.GetAll()
-	s.Confirm(ips[0].String())
+	s.Confirm(ips[0])
 
 	// Make a copy
 	otherIP := net.ParseIP(ips[0].String())
