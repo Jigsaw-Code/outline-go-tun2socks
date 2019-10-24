@@ -36,6 +36,7 @@ import (
 const (
 	mtu        = 1500
 	udpTimeout = 30 * time.Second
+	persistTun = true // Linux: persist the TUN interface after the last open file descriptor is closed.
 )
 
 var args struct {
@@ -112,7 +113,7 @@ func main() {
 
 	// Open TUN device
 	dnsResolvers := strings.Split(*args.tunDNS, ",")
-	tunDevice, err := tun.OpenTunDevice(*args.tunName, *args.tunAddr, *args.tunGw, *args.tunMask, dnsResolvers)
+	tunDevice, err := tun.OpenTunDevice(*args.tunName, *args.tunAddr, *args.tunGw, *args.tunMask, dnsResolvers, persistTun)
 	if err != nil {
 		log.Errorf("Failed to open TUN device: %v", err)
 		os.Exit(oss.SystemMisconfigured)
