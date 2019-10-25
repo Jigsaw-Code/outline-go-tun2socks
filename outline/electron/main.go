@@ -69,7 +69,7 @@ func main() {
 	args.proxyCipher = flag.String("proxyCipher", "chacha20-ietf-poly1305", "Shadowsocks proxy encryption cipher")
 	args.logLevel = flag.String("logLevel", "info", "Logging level: debug|info|warn|error|none")
 	args.dnsFallback = flag.Bool("dnsFallback", false, "Enable DNS fallback over TCP (overrides the UDP handler).")
-	args.checkConnectivity = flag.Bool("checkConnectivity", false, "Check the proxy TCP and UDP connectivity; exit on failure.")
+	args.checkConnectivity = flag.Bool("checkConnectivity", false, "Check the proxy TCP and UDP connectivity and exit.")
 	args.version = flag.Bool("version", false, "Print the version and exit.")
 
 	flag.Parse()
@@ -96,19 +96,13 @@ func main() {
 		os.Exit(oss.IllegalConfiguration)
 	}
 
-	connErrCode := oss.NoError
 	if *args.checkConnectivity {
-		// Check the proxy connectivity
-		var err error
-		connErrCode, err = oss.CheckConnectivity(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher)
+		connErrCode, err := oss.CheckConnectivity(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher)
+		log.Debugf("Connectivity checks error code: %v", connErrCode)
 		if err != nil {
 			log.Errorf("Failed to perform connectivity checks: %v", err)
-			os.Exit(oss.Unexpected)
 		}
-		log.Debugf("Connectivity checks error code: %v", connErrCode)
-		if !(connErrCode == oss.NoError || connErrCode == oss.UDPConnectivity) {
-			os.Exit(connErrCode)
-		}
+		os.Exit(connErrCode)
 	}
 
 	// Open TUN device
@@ -124,7 +118,7 @@ func main() {
 	// Register TCP and UDP connection handlers
 	core.RegisterTCPConnHandler(
 		shadowsocks.NewTCPHandler(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher))
-	if *args.dnsFallback || connErrCode == oss.UDPConnectivity {
+	if *args.dnsFallback {
 		// UDP connectivity not supported, fall back to DNS over TCP.
 		log.Debugf("Registering DNS fallback UDP handler")
 		core.RegisterUDPConnHandler(dnsfallback.NewUDPHandler())
