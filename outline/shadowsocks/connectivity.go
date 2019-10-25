@@ -18,7 +18,7 @@ const (
 	UDPConnectivity             = 4
 	Unreachable                 = 5
 	VpnStartFailure             = 6
-	IlegalConfiguration         = 7
+	IllegalConfiguration        = 7
 	ShadowsocksStartFailure     = 8
 	ConfigureSystemProxyFailure = 9
 	NoAdminPermissions          = 10

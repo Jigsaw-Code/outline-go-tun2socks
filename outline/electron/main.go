@@ -84,16 +84,16 @@ func main() {
 	// Validate proxy flags
 	if *args.proxyHost == "" {
 		log.Errorf("Must provide a Shadowsocks proxy host name or IP address")
-		os.Exit(oss.Unexpected)
+		os.Exit(oss.IllegalConfiguration)
 	} else if *args.proxyPort <= 0 || *args.proxyPort > 65535 {
 		log.Errorf("Must provide a valid Shadowsocks proxy port [1:65535]")
-		os.Exit(oss.Unexpected)
+		os.Exit(oss.IllegalConfiguration)
 	} else if *args.proxyPassword == "" {
 		log.Errorf("Must provide a Shadowsocks proxy password")
-		os.Exit(oss.Unexpected)
+		os.Exit(oss.IllegalConfiguration)
 	} else if *args.proxyCipher == "" {
 		log.Errorf("Must provide a Shadowsocks proxy encryption cipher")
-		os.Exit(oss.Unexpected)
+		os.Exit(oss.IllegalConfiguration)
 	}
 
 	connErrCode := oss.NoError
