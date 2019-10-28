@@ -204,10 +204,9 @@ func (t *transport) doQuery(q []byte) (response []byte, server *net.TCPAddr, qer
 		qerr = &queryError{BadQuery, fmt.Errorf("Query length is %d", len(q))}
 		return
 	}
-	id0, id1 := q[0], q[1]
-	id := int(id0)*256 + int(id1)
 	// Zero out the query ID.
-	q[0], q[1] = 0, 0
+	id := binary.BigEndian.Uint16(q)
+	binary.BigEndian.PutUint16(q, 0)
 	req, err := http.NewRequest(http.MethodPost, t.url, bytes.NewBuffer(q))
 	if err != nil {
 		qerr = &queryError{InternalError, err}
@@ -328,9 +327,9 @@ func (t *transport) doQuery(q []byte) (response []byte, server *net.TCPAddr, qer
 		return
 	}
 	// Restore the query ID.
-	q[0], q[1] = id0, id1
+	binary.BigEndian.PutUint16(q, id)
 	if len(response) >= 2 {
-		response[0], response[1] = id0, id1
+		binary.BigEndian.PutUint16(response, id)
 	} else {
 		qerr = &queryError{BadResponse, fmt.Errorf("Response length is %d", len(response))}
 		return

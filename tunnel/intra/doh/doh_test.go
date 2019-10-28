@@ -292,23 +292,11 @@ func (l *fakeListener) OnTransaction(s *Summary) {
 
 type fakeConn struct {
 	net.TCPConn
-	remoteAddr fakeAddr
+	remoteAddr *net.TCPAddr
 }
 
 func (c *fakeConn) RemoteAddr() net.Addr {
 	return c.remoteAddr
-}
-
-type fakeAddr struct {
-	addr string
-}
-
-func (a fakeAddr) String() string {
-	return a.addr
-}
-
-func (a fakeAddr) Network() string {
-	return "tcp"
 }
 
 // Check that the DNSListener is called with a correct summary.
@@ -322,7 +310,12 @@ func TestListener(t *testing.T) {
 	go func() {
 		req := <-rt.req
 		trace := httptrace.ContextClientTrace(req.Context())
-		trace.GotConn(httptrace.GotConnInfo{Conn: &fakeConn{remoteAddr: fakeAddr{"foo:443"}}})
+		trace.GotConn(httptrace.GotConnInfo{
+			Conn: &fakeConn{
+				remoteAddr: &net.TCPAddr{
+					IP:   net.ParseIP("192.0.2.2"),
+					Port: 443,
+				}}})
 
 		r, w := io.Pipe()
 		rt.resp <- &http.Response{
@@ -345,7 +338,7 @@ func TestListener(t *testing.T) {
 	if !bytes.Equal(s.Response, []byte{1, 2, 8, 9, 10}) {
 		t.Errorf("Wrong response: %v", s.Response)
 	}
-	if s.Server != "foo" {
+	if s.Server != "192.0.2.2" {
 		t.Errorf("Wrong server IP string: %s", s.Server)
 	}
 	if s.Status != Complete {
