@@ -127,13 +127,8 @@ func (s *IPSet) Confirmed() net.IP {
 	return s.confirmed
 }
 
-// Confirm marks ipstr as the confirmed address, if it is a valid IP address.
-func (s *IPSet) Confirm(ipstr string) {
-	ip := net.ParseIP(ipstr)
-	if ip == nil {
-		// Ignore invalid IP address.
-		return
-	}
+// Confirm marks ip as the confirmed address.
+func (s *IPSet) Confirm(ip net.IP) {
 	// Optimization: Skip setting if it hasn't changed.
 	if ip.Equal(s.Confirmed()) {
 		// This is the common case.
