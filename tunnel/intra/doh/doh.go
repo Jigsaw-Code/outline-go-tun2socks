@@ -53,16 +53,21 @@ const (
 
 // Summary is a summary of a DNS transaction, reported when it is complete.
 type Summary struct {
-	Latency  float64 // Response (or failure) latency in seconds
-	Query    []byte
-	Response []byte
-	Server   string
-	Status   int
+	Latency    float64 // Response (or failure) latency in seconds
+	Query      []byte
+	Response   []byte
+	Server     string
+	Status     int
+	HTTPStatus int // Zero unless Status is Complete or HTTPError
 }
+
+// A Token is an opaque handle used to match responses to queries.
+type Token interface{}
 
 // Listener receives Summaries.
 type Listener interface {
-	OnTransaction(*Summary)
+	OnQuery(url string) Token
+	OnResponse(Token, *Summary)
 }
 
 // Transport represents a DNS query transport.  This interface is exported by gobind,
@@ -193,6 +198,14 @@ func (e *queryError) Unwrap() error {
 	return e.err
 }
 
+type httpError struct {
+	status int
+}
+
+func (e *httpError) Error() string {
+	return fmt.Sprintf("HTTP request failed: %d", e.status)
+}
+
 // Given a raw DNS query (including the query ID), this function sends the
 // query.  If the query is successful, it returns the response and a nil qerr.  Otherwise,
 // it returns a nil response and a qerr with a status value indicating the cause.
@@ -317,13 +330,13 @@ func (t *transport) doQuery(q []byte) (response []byte, server *net.TCPAddr, qer
 	hostname = httpResponse.Request.URL.Hostname()
 
 	if httpResponse.StatusCode != http.StatusOK {
-		err := fmt.Errorf("HTTP request failed: %d", httpResponse.StatusCode)
 		reqBuf := new(bytes.Buffer)
 		req.Write(reqBuf)
 		respBuf := new(bytes.Buffer)
 		httpResponse.Write(respBuf)
 		log.Debugf("%d request: %s\nresponse: %s", id, reqBuf.String(), respBuf.String())
-		qerr = &queryError{HTTPError, err}
+
+		qerr = &queryError{HTTPError, &httpError{httpResponse.StatusCode}}
 		return
 	}
 	// Restore the query ID.
@@ -342,26 +355,42 @@ func (t *transport) doQuery(q []byte) (response []byte, server *net.TCPAddr, qer
 }
 
 func (t *transport) Query(q []byte) ([]byte, error) {
+	var token Token
+	if t.listener != nil {
+		token = t.listener.OnQuery(t.url)
+	}
+
 	before := time.Now()
 	response, server, err := t.doQuery(q)
 	after := time.Now()
+
 	if t.listener != nil {
 		latency := after.Sub(before)
 		status := Complete
+		httpStatus := http.StatusOK
 		var qerr *queryError
 		if errors.As(err, &qerr) {
 			status = qerr.status
+			httpStatus = 0
+
+			var herr *httpError
+			if errors.As(qerr.err, &herr) {
+				httpStatus = herr.status
+			}
 		}
+
 		var ip string
 		if server != nil {
 			ip = server.IP.String()
 		}
-		t.listener.OnTransaction(&Summary{
-			Latency:  latency.Seconds(),
-			Query:    q,
-			Response: response,
-			Server:   ip,
-			Status:   status,
+
+		t.listener.OnResponse(token, &Summary{
+			Latency:    latency.Seconds(),
+			Query:      q,
+			Response:   response,
+			Server:     ip,
+			Status:     status,
+			HTTPStatus: httpStatus,
 		})
 	}
 	return response, err
