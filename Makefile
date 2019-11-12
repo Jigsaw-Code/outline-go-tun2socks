@@ -3,13 +3,13 @@ GOBIND=$(GOMOBILE) bind
 XGOCMD=xgo
 BUILDDIR=$(shell pwd)/build
 IMPORT_PATH=github.com/Jigsaw-Code/outline-go-tun2socks
+ELECTRON_PATH=$(GOPATH)/src/$(IMPORT_PATH)/outline/electron
 LDFLAGS='-s -w'
 ANDROID_LDFLAGS='-w' # Don't strip Android debug symbols so we can upload them to crash reporting tools.
-TUN2SOCKS_VERSION=v1.16.3
+TUN2SOCKS_VERSION=v1.16.7
 TUN2SOCKS_SRC_PATH=$(GOPATH)/src/github.com/eycorsican/go-tun2socks
 TUN2SOCKS_MOD_PATH=$(GOPATH)/pkg/mod/github.com/eycorsican/go-tun2socks\@$(TUN2SOCKS_VERSION)
 XGO_LDFLAGS='-s -w -X main.version=$(TUN2SOCKS_VERSION)'
-XGO_BUILD_TAGS='dnsfallback socks'
 
 ANDROID_BUILDDIR=$(BUILDDIR)/android
 ANDROID_ARTIFACT=$(ANDROID_BUILDDIR)/tun2socks.aar
@@ -25,8 +25,8 @@ ANDROID_OUTLINE_BUILD_CMD="$(ANDROID_BUILD_CMD) $(IMPORT_PATH)/outline/android $
 ANDROID_INTRA_BUILD_CMD="$(ANDROID_BUILD_CMD) $(IMPORT_PATH)/intra $(IMPORT_PATH)/tunnel $(IMPORT_PATH)/tunnel/intra $(IMPORT_PATH)/tunnel/intra/doh $(IMPORT_PATH)/tunnel/intra/split"
 IOS_BUILD_CMD="GO111MODULE=off $(GOBIND) -a -ldflags $(LDFLAGS) -bundleid org.outline.tun2socks -target=ios/arm,ios/arm64 -tags ios -o $(IOS_ARTIFACT) $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks"
 MACOS_BUILD_CMD="GO111MODULE=off ./tools/$(GOBIND) -a -ldflags $(LDFLAGS) -bundleid org.outline.tun2socks -target=ios/amd64 -tags ios -o $(MACOS_ARTIFACT) $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks"
-WINDOWS_BUILD_CMD="$(XGOCMD) -ldflags $(XGO_LDFLAGS) -tags $(XGO_BUILD_TAGS)  --targets=windows/386 -dest $(WINDOWS_BUILDDIR) $(TUN2SOCKS_SRC_PATH)/cmd/tun2socks"
-LINUX_BUILD_CMD="$(XGOCMD) -ldflags $(XGO_LDFLAGS) -tags $(XGO_BUILD_TAGS) --targets=linux/amd64 -dest $(LINUX_BUILDDIR) $(TUN2SOCKS_SRC_PATH)/cmd/tun2socks"
+WINDOWS_BUILD_CMD="$(XGOCMD) -ldflags $(XGO_LDFLAGS) --targets=windows/386 -dest $(WINDOWS_BUILDDIR) $(ELECTRON_PATH)"
+LINUX_BUILD_CMD="$(XGOCMD) -ldflags $(XGO_LDFLAGS) --targets=linux/amd64 -dest $(LINUX_BUILDDIR) $(ELECTRON_PATH)"
 
 define build
 	$(call modularize)

@@ -11,19 +11,19 @@ import (
 
 // Outline error codes. Must be kept in sync with definitions in outline-client/cordova-plugin-outline/outlinePlugin.js
 const (
-	noError                     = 0
-	unexpected                  = 1
-	noVPNPermissions            = 2
-	authenticationFailure       = 3
-	udpConnectivity             = 4
-	unreachable                 = 5
-	vpnStartFailure             = 6
-	ilegalConfiguration         = 7
-	shadowsocksStartFailure     = 8
-	configureSystemProxyFailure = 9
-	noAdminPermissions          = 10
-	unsupportedRoutingTable     = 11
-	systemMisconfigured         = 12
+	NoError                     = 0
+	Unexpected                  = 1
+	NoVPNPermissions            = 2
+	AuthenticationFailure       = 3
+	UDPConnectivity             = 4
+	Unreachable                 = 5
+	VpnStartFailure             = 6
+	IllegalConfiguration        = 7
+	ShadowsocksStartFailure     = 8
+	ConfigureSystemProxyFailure = 9
+	NoAdminPermissions          = 10
+	UnsupportedRoutingTable     = 11
+	SystemMisconfigured         = 12
 )
 
 const reachabilityTimeout = 10 * time.Second
@@ -36,7 +36,7 @@ func CheckConnectivity(host string, port int, password, cipher string) (int, err
 	client, err := shadowsocks.NewClient(host, port, password, cipher)
 	if err != nil {
 		// TODO: Inspect error for invalid cipher error or proxy host resolution failure.
-		return unexpected, err
+		return Unexpected, err
 	}
 	tcpChan := make(chan error)
 	// Check whether the proxy is reachable and that the client is able to authenticate to the proxy
@@ -48,22 +48,22 @@ func CheckConnectivity(host string, port int, password, cipher string) (int, err
 	if udpErr == nil {
 		// The UDP connectvity check is a superset of the TCP checks. If the other tests fail,
 		// assume it's due to intermittent network conditions and declare success anyway.
-		return noError, nil
+		return NoError, nil
 	}
 	tcpErr := <-tcpChan
 	if tcpErr == nil {
 		// The TCP connectivity checks succeeded, which means UDP is not supported.
-		return udpConnectivity, nil
+		return UDPConnectivity, nil
 	}
 	_, isReachabilityError := tcpErr.(*oss.ReachabilityError)
 	_, isAuthError := tcpErr.(*oss.AuthenticationError)
 	if isAuthError {
-		return authenticationFailure, nil
+		return AuthenticationFailure, nil
 	} else if isReachabilityError {
-		return unreachable, nil
+		return Unreachable, nil
 	}
 	// The error is not related to the connectivity checks.
-	return unexpected, tcpErr
+	return Unexpected, tcpErr
 }
 
 // CheckServerReachable determines whether the server at `host:port` is reachable over TCP.

@@ -18,4 +18,4 @@ readonly BUILD_DIR=build/windows
 
 rm -rf $BUILD_DIR
 make clean && make windows
-mv $BUILD_DIR/tun2socks-windows-4.0-386.exe $BUILD_DIR/tun2socks.exe
+mv $BUILD_DIR/electron-windows-4.0-386.exe $BUILD_DIR/tun2socks.exe
