@@ -188,7 +188,7 @@ func TestRequest(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	if len(reqBody)%OptDefaultPaddingLen != 0 {
+	if len(reqBody)%PaddingBlockSize != 0 {
 		t.Errorf("reqBody has unexpected length: %d", len(reqBody))
 	}
 	// Parse reqBody into a Message.

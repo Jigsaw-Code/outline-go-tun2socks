@@ -20,7 +20,7 @@ import (
 
 const (
 	OptResourcePaddingCode = 12
-	OptDefaultPaddingLen   = 128 // RFC8467 recommendation
+	PaddingBlockSize       = 128 // RFC8467 recommendation
 )
 
 const kOptRrHeaderLen int = 1 + // DOMAIN NAME
@@ -60,7 +60,7 @@ func computePaddingSize(msgLen int, hasOptRr bool, blockSize int) int {
 func getPadding(msgLen int, hasOptRr bool) dnsmessage.Option {
 	optPadding := dnsmessage.Option{
 		Code: OptResourcePaddingCode,
-		Data: make([]byte, computePaddingSize(msgLen, hasOptRr, OptDefaultPaddingLen)),
+		Data: make([]byte, computePaddingSize(msgLen, hasOptRr, PaddingBlockSize)),
 	}
 	return optPadding
 }
