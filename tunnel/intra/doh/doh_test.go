@@ -286,8 +286,12 @@ type fakeListener struct {
 	summary *Summary
 }
 
-func (l *fakeListener) OnTransaction(s *Summary) {
-	l.summary = s
+func (l *fakeListener) OnQuery(url string) Token {
+	return nil
+}
+
+func (l *fakeListener) OnResponse(tok Token, summ *Summary) {
+	l.summary = summ
 }
 
 type fakeConn struct {
