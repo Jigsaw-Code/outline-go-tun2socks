@@ -188,6 +188,13 @@ func TestRequest(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
+	if len(reqBody)%OptDefaultPaddingLen != 0 {
+		t.Errorf("reqBody has unexpected length: %d", len(reqBody))
+	}
+	reqBodyPaddedAgain, err := AddEdnsPadding(reqBody)
+	if !bytes.Equal(reqBody, reqBodyPaddedAgain) {
+		t.Errorf("Padding should be idempotent\n%v\n%v", reqBody, reqBodyPaddedAgain)
+	}
 	// Parse reqBody into a Message.
 	var newQuery dnsmessage.Message
 	newQuery.Unpack(reqBody)
