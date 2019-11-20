@@ -287,8 +287,7 @@ type fakeListener struct {
 }
 
 func (l *fakeListener) OnQuery(url string) Token {
-	var tok Token
-	return tok
+	return nil
 }
 
 func (l *fakeListener) OnResponse(tok Token, summ *Summary) {
