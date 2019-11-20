@@ -24,7 +24,10 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
+	"reflect"
 	"testing"
+
+	"golang.org/x/net/dns/dnsmessage"
 )
 
 var testURL = "https://dns.google/dns-query"
@@ -35,6 +38,38 @@ var ips = []string{
 	"2001:4860:4860::8844",
 }
 var parsedURL *url.URL
+
+var testQuery dnsmessage.Message = dnsmessage.Message{
+	Header: dnsmessage.Header{
+		ID:                 0xbeef,
+		Response:           true,
+		OpCode:             0,
+		Authoritative:      false,
+		Truncated:          true,
+		RecursionDesired:   false,
+		RecursionAvailable: false,
+		RCode:              0,
+	},
+	Questions: []dnsmessage.Question{
+		dnsmessage.Question{
+			Name:  dnsmessage.MustNewName("www.example.com."),
+			Type:  dnsmessage.TypeA,
+			Class: dnsmessage.ClassINET,
+		}},
+	Answers:     []dnsmessage.Resource{},
+	Authorities: []dnsmessage.Resource{},
+	Additionals: []dnsmessage.Resource{},
+}
+
+func mustPack(m *dnsmessage.Message) []byte {
+	packed, err := m.Pack()
+	if err != nil {
+		panic(err)
+	}
+	return packed
+}
+
+var testQueryBytes []byte = mustPack(&testQuery)
 
 func init() {
 	parsedURL, _ = url.Parse(testURL)
@@ -144,7 +179,7 @@ func TestRequest(t *testing.T) {
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
-	go doh.Query([]byte{1, 2, 3, 4, 5})
+	go doh.Query(testQueryBytes)
 	req := <-rt.req
 	if req.URL.String() != testURL {
 		t.Errorf("URL mismatch: %s != %s", req.URL.String(), testURL)
@@ -153,9 +188,18 @@ func TestRequest(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	// The first two bytes are the ID, so they should be set to zero.
-	if !bytes.Equal([]byte{0, 0, 3, 4, 5}, reqBody) {
-		t.Errorf("Unexpected request body %v", reqBody)
+	// Parse reqBody into a Message.
+	var newQuery dnsmessage.Message
+	newQuery.Unpack(reqBody)
+	// Ensure the converted request has an ID of zero.
+	if newQuery.Header.ID != 0 {
+		t.Errorf("Unexpected request header id: %v", newQuery.Header.ID)
+	}
+	// Check that all fields except for Header.ID and Additionals
+	// are the same as the original.  Additionals may differ if
+	// padding was added.
+	if !queriesMostlyEqual(testQuery, newQuery) {
+		t.Errorf("Unexpected query body:\n\t%v\nExpected:\n\t%v", newQuery, testQuery)
 	}
 	contentType := req.Header.Get("Content-Type")
 	if contentType != "application/dns-message" {
@@ -165,6 +209,15 @@ func TestRequest(t *testing.T) {
 	if accept != "application/dns-message" {
 		t.Errorf("Wrong Accept header: %s", accept)
 	}
+}
+
+// Check that all fields of m1 match those of m2, except for Header.ID
+// and Additionals.
+func queriesMostlyEqual(m1 dnsmessage.Message, m2 dnsmessage.Message) bool {
+	// Make fields we don't care about match, so that equality check is easy.
+	m1.Header.ID = m2.Header.ID
+	m1.Additionals = m2.Additionals
+	return reflect.DeepEqual(m1, m2)
 }
 
 // Check that a DOH response is returned correctly.
@@ -184,16 +237,26 @@ func TestResponse(t *testing.T) {
 			Request:    &http.Request{URL: parsedURL},
 		}
 		// The DOH response should have a zero query ID.
-		w.Write([]byte{0, 0, 8, 9, 10})
+		var modifiedQuery dnsmessage.Message = testQuery
+		modifiedQuery.Header.ID = 0
+		w.Write(mustPack(&modifiedQuery))
 		w.Close()
 	}()
 
-	resp, err := doh.Query([]byte{1, 2, 3, 4, 5})
+	resp, err := doh.Query(testQueryBytes)
 	if err != nil {
 		t.Error(err)
 	}
+
+	// Parse the response as a DNS message.
+	var respParsed dnsmessage.Message
+	if err := respParsed.Unpack(resp); err != nil {
+		t.Errorf("Could not parse Message %v", err)
+	}
+
 	// Query() should reconstitute the query ID in the response.
-	if !bytes.Equal([]byte{1, 2, 8, 9, 10}, resp) {
+	if respParsed.Header.ID != testQuery.Header.ID ||
+		!queriesMostlyEqual(respParsed, testQuery) {
 		t.Errorf("Unexpected response %v", resp)
 	}
 }
@@ -219,7 +282,7 @@ func TestEmptyResponse(t *testing.T) {
 		}
 	}()
 
-	_, err := doh.Query([]byte{1, 2, 3, 4, 5})
+	_, err := doh.Query(testQueryBytes)
 	var qerr *queryError
 	if err == nil {
 		t.Error("Empty body should cause an error")
@@ -249,7 +312,7 @@ func TestHTTPError(t *testing.T) {
 		w.Close()
 	}()
 
-	_, err := doh.Query([]byte{1, 2, 3, 4, 5})
+	_, err := doh.Query(testQueryBytes)
 	var qerr *queryError
 	if err == nil {
 		t.Error("Empty body should cause an error")
@@ -268,7 +331,7 @@ func TestSendFailed(t *testing.T) {
 	transport.client.Transport = rt
 
 	rt.err = errors.New("test")
-	_, err := doh.Query([]byte{1, 2, 3, 4, 5})
+	_, err := doh.Query(testQueryBytes)
 	var qerr *queryError
 	if err == nil {
 		t.Error("Send failure should be reported")
@@ -331,15 +394,15 @@ func TestListener(t *testing.T) {
 		w.Close()
 	}()
 
-	doh.Query([]byte{1, 2, 3, 4, 5})
+	doh.Query(testQueryBytes)
 	s := listener.summary
 	if s.Latency < 0 {
 		t.Errorf("Negative latency: %f", s.Latency)
 	}
-	if !bytes.Equal(s.Query, []byte{1, 2, 3, 4, 5}) {
+	if !bytes.Equal(s.Query, testQueryBytes) {
 		t.Errorf("Wrong query: %v", s.Query)
 	}
-	if !bytes.Equal(s.Response, []byte{1, 2, 8, 9, 10}) {
+	if !bytes.Equal(s.Response, []byte{0xbe, 0xef, 8, 9, 10}) {
 		t.Errorf("Wrong response: %v", s.Response)
 	}
 	if s.Server != "192.0.2.2" {
@@ -420,7 +483,7 @@ func TestAccept(t *testing.T) {
 
 	lbuf := make([]byte, 2)
 	// Send Query
-	queryData := []byte{1, 2, 3, 4, 5}
+	queryData := testQueryBytes
 	binary.BigEndian.PutUint16(lbuf, uint16(len(queryData)))
 	n, err := client.Write(lbuf)
 	if err != nil {
@@ -479,7 +542,7 @@ func TestAcceptFail(t *testing.T) {
 
 	lbuf := make([]byte, 2)
 	// Send Query
-	queryData := []byte{1, 2, 3, 4, 5}
+	queryData := testQueryBytes
 	binary.BigEndian.PutUint16(lbuf, uint16(len(queryData)))
 	client.Write(lbuf)
 	client.Write(queryData)
@@ -511,7 +574,7 @@ func TestAcceptClose(t *testing.T) {
 
 	lbuf := make([]byte, 2)
 	// Send Query
-	queryData := []byte{1, 2, 3, 4, 5}
+	queryData := testQueryBytes
 	binary.BigEndian.PutUint16(lbuf, uint16(len(queryData)))
 	client.Write(lbuf)
 	client.Write(queryData)
@@ -541,7 +604,7 @@ func TestAcceptOversize(t *testing.T) {
 
 	lbuf := make([]byte, 2)
 	// Send Query
-	queryData := []byte{1, 2, 3, 4, 5}
+	queryData := testQueryBytes
 	binary.BigEndian.PutUint16(lbuf, uint16(len(queryData)))
 	client.Write(lbuf)
 	client.Write(queryData)
