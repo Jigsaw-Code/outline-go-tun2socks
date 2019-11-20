@@ -20,7 +20,7 @@ import (
 
 const (
 	OptResourcePaddingCode = 12
-	OptDefaultPaddingLen   = 400
+	OptDefaultPaddingLen   = 128 // RFC8467 recommendation
 )
 
 const kOptRrHeaderLen int = 1 + // DOMAIN NAME
@@ -36,7 +36,6 @@ const kOptPaddingHeaderLen int = 2 + // OPTION-CODE
 // headers. Assumes that |msgLen| is the length of a raw DNS message
 // excluding any RFC7830 padding option.
 func computePaddingSize(msgLen int, hasOptRr bool, blockSize int) int {
-	var padSize int = 0
 	// We'll always be adding a new padding header inside the OPT
 	// RR's data.
 	var extraPadding = kOptPaddingHeaderLen
@@ -47,8 +46,12 @@ func computePaddingSize(msgLen int, hasOptRr bool, blockSize int) int {
 		extraPadding += kOptRrHeaderLen
 	}
 
-	for (msgLen+extraPadding+padSize)%blockSize != 0 {
-		padSize++
+	var padSize int = blockSize - (msgLen+extraPadding)%blockSize
+	if padSize < 0 {
+		padSize *= -1
+	}
+	if padSize%blockSize == 0 {
+		padSize = 0
 	}
 	return padSize
 }
@@ -78,34 +81,25 @@ func AddEdnsPadding(rawMsg []byte) ([]byte, error) {
 		}
 	}
 
-	if optRes == nil {
-		// Append a new OPT resource.
-		msg.Additionals = append(msg.Additionals, dnsmessage.Resource{
-			Header: dnsmessage.ResourceHeader{
-				Name:  dnsmessage.MustNewName("."),
-				Class: dnsmessage.ClassINET,
-				TTL:   0,
-			},
-			Body: &dnsmessage.OPTResource{
-				Options: []dnsmessage.Option{
-					getPadding(len(rawMsg), false),
-				},
-			},
-		})
-	} else {
-		// Search for a padding Option and delete it.
-		for i, option := range optRes.Options {
-			if option.Code == OptResourcePaddingCode {
-				optRes.Options = append(optRes.Options[:i], optRes.Options[i+1:]...)
-				break
-			}
-		}
-		repackedMsg, err := msg.Pack()
-		if err != nil {
-			return nil, err
-		}
-		optRes.Options = append(optRes.Options, getPadding(len(repackedMsg), true))
+	if optRes != nil {
+		// If the message already contains padding, we will
+		// respect the application's padding.
+		return rawMsg, nil
 	}
+
+	// Append a new OPT resource.
+	msg.Additionals = append(msg.Additionals, dnsmessage.Resource{
+		Header: dnsmessage.ResourceHeader{
+			Name:  dnsmessage.MustNewName("."),
+			Class: dnsmessage.ClassINET,
+			TTL:   0,
+		},
+		Body: &dnsmessage.OPTResource{
+			Options: []dnsmessage.Option{
+				getPadding(len(rawMsg), false),
+			},
+		},
+	})
 
 	// Re-pack the message, with compression unconditionally enabled.
 	return msg.Pack()

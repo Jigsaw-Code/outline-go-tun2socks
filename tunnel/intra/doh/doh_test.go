@@ -191,10 +191,6 @@ func TestRequest(t *testing.T) {
 	if len(reqBody)%OptDefaultPaddingLen != 0 {
 		t.Errorf("reqBody has unexpected length: %d", len(reqBody))
 	}
-	reqBodyPaddedAgain, err := AddEdnsPadding(reqBody)
-	if !bytes.Equal(reqBody, reqBodyPaddedAgain) {
-		t.Errorf("Padding should be idempotent\n%v\n%v", reqBody, reqBodyPaddedAgain)
-	}
 	// Parse reqBody into a Message.
 	var newQuery dnsmessage.Message
 	newQuery.Unpack(reqBody)
@@ -627,5 +623,31 @@ func TestAcceptOversize(t *testing.T) {
 	n, _ := client.Read(lbuf)
 	if n != 0 {
 		t.Error("Expected to read 0 bytes")
+	}
+}
+
+func TestComputePaddingSize(t *testing.T) {
+	if computePaddingSize(100-kOptRrHeaderLen-kOptPaddingHeaderLen, false, 100) != 0 {
+		t.Errorf("Expected no padding")
+	}
+	if computePaddingSize(200-kOptRrHeaderLen-kOptPaddingHeaderLen, false, 100) != 0 {
+		t.Errorf("Expected no padding")
+	}
+	if computePaddingSize(190-kOptRrHeaderLen-kOptPaddingHeaderLen, false, 100) != 10 {
+		t.Errorf("Expected to pad up to next block")
+	}
+}
+
+func TestAddEdnsPaddingIdempotent(t *testing.T) {
+	padded, err := AddEdnsPadding(testQueryBytes)
+	if err != nil {
+		panic(err)
+	}
+	paddedAgain, err := AddEdnsPadding(padded)
+	if err != nil {
+		panic(err)
+	}
+	if !bytes.Equal(padded, paddedAgain) {
+		t.Errorf("Padding should be idempotent\n%v\n%v", padded, paddedAgain)
 	}
 }
