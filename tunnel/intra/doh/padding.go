@@ -34,7 +34,8 @@ const kOptPaddingHeaderLen int = 2 + // OPTION-CODE
 
 // Compute the number of padding bytes needed, excluding
 // headers. Assumes that |msgLen| is the length of a raw DNS message
-// excluding any RFC7830 padding option.
+// excluding any RFC7830 padding option, and that the message is fully
+// label-compressed.
 func computePaddingSize(msgLen int, hasOptRr bool, blockSize int) int {
 	// We'll always be adding a new padding header inside the OPT
 	// RR's data.
@@ -87,6 +88,15 @@ func AddEdnsPadding(rawMsg []byte) ([]byte, error) {
 		return rawMsg, nil
 	}
 
+	// Build the padding option that we will need. We can't use
+	// the length of |rawMsg|, since its labels may be compressed
+	// differently than the way the Pack function does it.
+	compressedMsg, err := msg.Pack()
+	if err != nil {
+		return nil, err
+	}
+	paddingOption := getPadding(len(compressedMsg), false)
+
 	// Append a new OPT resource.
 	msg.Additionals = append(msg.Additionals, dnsmessage.Resource{
 		Header: dnsmessage.ResourceHeader{
@@ -95,9 +105,7 @@ func AddEdnsPadding(rawMsg []byte) ([]byte, error) {
 			TTL:   0,
 		},
 		Body: &dnsmessage.OPTResource{
-			Options: []dnsmessage.Option{
-				getPadding(len(rawMsg), false),
-			},
+			Options: []dnsmessage.Option{paddingOption},
 		},
 	})
 
