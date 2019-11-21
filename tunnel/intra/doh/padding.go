@@ -47,14 +47,8 @@ func computePaddingSize(msgLen int, hasOptRr bool, blockSize int) int {
 		extraPadding += kOptRrHeaderLen
 	}
 
-	var padSize int = blockSize - (msgLen+extraPadding)%blockSize
-	if padSize < 0 {
-		padSize *= -1
-	}
-	if padSize%blockSize == 0 {
-		padSize = 0
-	}
-	return padSize
+	padSize := blockSize - (msgLen+extraPadding)%blockSize
+	return padSize % blockSize
 }
 
 func getPadding(msgLen int, hasOptRr bool) dnsmessage.Option {
@@ -81,11 +75,14 @@ func AddEdnsPadding(rawMsg []byte) ([]byte, error) {
 			break
 		}
 	}
-
 	if optRes != nil {
-		// If the message already contains padding, we will
-		// respect the application's padding.
-		return rawMsg, nil
+		// Search for a padding Option. If the message already contains
+		// padding, we will respect the application's padding.
+		for _, option := range optRes.Options {
+			if option.Code == OptResourcePaddingCode {
+				return rawMsg, nil
+			}
+		}
 	}
 
 	// Build the padding option that we will need. We can't use
