@@ -231,7 +231,6 @@ func (t *transport) doQuery(q []byte) (response []byte, server *net.TCPAddr, qer
 	// Add padding to the raw query
 	q, err := AddEdnsPadding(q)
 	if err != nil {
-		fmt.Println(err)
 		qerr = &queryError{InternalError, err}
 		return
 	}

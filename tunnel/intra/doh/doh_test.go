@@ -69,6 +69,15 @@ func mustPack(m *dnsmessage.Message) []byte {
 	return packed
 }
 
+func mustUnpack(q []byte) *dnsmessage.Message {
+	var m dnsmessage.Message
+	err := m.Unpack(q)
+	if err != nil {
+		panic(err)
+	}
+	return &m
+}
+
 var simpleQueryBytes []byte = mustPack(&simpleQuery)
 
 var compressedQueryBytes []byte = []byte{
@@ -234,8 +243,7 @@ func TestRequest(t *testing.T) {
 		t.Errorf("reqBody has unexpected length: %d", len(reqBody))
 	}
 	// Parse reqBody into a Message.
-	var newQuery dnsmessage.Message
-	newQuery.Unpack(reqBody)
+	newQuery := mustUnpack(reqBody)
 	// Ensure the converted request has an ID of zero.
 	if newQuery.Header.ID != 0 {
 		t.Errorf("Unexpected request header id: %v", newQuery.Header.ID)
@@ -243,7 +251,7 @@ func TestRequest(t *testing.T) {
 	// Check that all fields except for Header.ID and Additionals
 	// are the same as the original.  Additionals may differ if
 	// padding was added.
-	if !queriesMostlyEqual(simpleQuery, newQuery) {
+	if !queriesMostlyEqual(simpleQuery, *newQuery) {
 		t.Errorf("Unexpected query body:\n\t%v\nExpected:\n\t%v", newQuery, simpleQuery)
 	}
 	contentType := req.Header.Get("Content-Type")
@@ -294,14 +302,11 @@ func TestResponse(t *testing.T) {
 	}
 
 	// Parse the response as a DNS message.
-	var respParsed dnsmessage.Message
-	if err := respParsed.Unpack(resp); err != nil {
-		t.Errorf("Could not parse Message %v", err)
-	}
+	respParsed := mustUnpack(resp)
 
 	// Query() should reconstitute the query ID in the response.
 	if respParsed.Header.ID != simpleQuery.Header.ID ||
-		!queriesMostlyEqual(respParsed, simpleQuery) {
+		!queriesMostlyEqual(*respParsed, simpleQuery) {
 		t.Errorf("Unexpected response %v", resp)
 	}
 }
@@ -705,28 +710,16 @@ func TestAddEdnsPaddingUncompressedQuery(t *testing.T) {
 }
 
 func TestDnsMessageCompressedQuery(t *testing.T) {
-	var m dnsmessage.Message
-	if err := m.Unpack(compressedQueryBytes); err != nil {
-		panic(err)
-	}
-	packedBytes, err := m.Pack()
-	if err != nil {
-		panic(err)
-	}
+	m := mustUnpack(compressedQueryBytes)
+	packedBytes := mustPack(m)
 	if len(packedBytes) != len(compressedQueryBytes) {
 		t.Errorf("Packed query has different size than original:\n  %v\n  %v", packedBytes, compressedQueryBytes)
 	}
 }
 
 func TestDnsMessageUncompressedQuery(t *testing.T) {
-	var m dnsmessage.Message
-	if err := m.Unpack(uncompressedQueryBytes); err != nil {
-		panic(err)
-	}
-	packedBytes, err := m.Pack()
-	if err != nil {
-		panic(err)
-	}
+	m := mustUnpack(uncompressedQueryBytes)
+	packedBytes := mustPack(m)
 	if len(packedBytes) >= len(uncompressedQueryBytes) {
 		t.Errorf("Compressed query is not smaller than uncompressed query")
 	}
