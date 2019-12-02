@@ -45,7 +45,7 @@ func computePaddingSize(msgLen int, blockSize int) int {
 	return padSize % blockSize
 }
 
-// Creates an appropriately-sized padding option. Precondition: |msgLen| is the
+// Create an appropriately-sized padding option. Precondition: |msgLen| is the
 // length of a message that already contains an OPT RR.
 func getPadding(msgLen int) dnsmessage.Option {
 	optPadding := dnsmessage.Option{
@@ -99,14 +99,15 @@ func AddEdnsPadding(rawMsg []byte) ([]byte, error) {
 	// At this point, |msg| contains an OPT resource, and that OPT resource
 	// does not contain a padding option.
 
-	// Compress the message to determine how large it is without padding.
+	// Compress the message to determine its size before padding.
 	compressedMsg, err := msg.Pack()
 	if err != nil {
 		return nil, err
 	}
-	// Add a padding option to |msg| that we will round its wire size up to
-	// the nearest block.
-	optRes.Options = append(optRes.Options, getPadding(len(compressedMsg)))
+	// Add the padding option to |msg| that will round its size on the wire
+	// up to the nearest block.
+	paddingOption := getPadding(len(compressedMsg))
+	optRes.Options = append(optRes.Options, paddingOption)
 
 	// Re-pack the message, with compression unconditionally enabled.
 	return msg.Pack()
