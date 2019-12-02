@@ -32,29 +32,25 @@ const kOptRrHeaderLen int = 1 + // DOMAIN NAME
 const kOptPaddingHeaderLen int = 2 + // OPTION-CODE
 	2 // OPTION-LENGTH
 
-// Compute the number of padding bytes needed, excluding
-// headers. Assumes that |msgLen| is the length of a raw DNS message
-// excluding any RFC7830 padding option, and that the message is fully
+// Compute the number of padding bytes needed, excluding headers.
+// Assumes that |msgLen| is the length of a raw DNS message that contains an
+// OPT RR with no RFC7830 padding option, and that the message is fully
 // label-compressed.
-func computePaddingSize(msgLen int, hasOptRr bool, blockSize int) int {
+func computePaddingSize(msgLen int, blockSize int) int {
 	// We'll always be adding a new padding header inside the OPT
 	// RR's data.
-	var extraPadding = kOptPaddingHeaderLen
-
-	// If we don't already have an OPT RR, we'll need to add its
-	// header as well!
-	if !hasOptRr {
-		extraPadding += kOptRrHeaderLen
-	}
+	extraPadding := kOptPaddingHeaderLen
 
 	padSize := blockSize - (msgLen+extraPadding)%blockSize
 	return padSize % blockSize
 }
 
-func getPadding(msgLen int, hasOptRr bool) dnsmessage.Option {
+// Creates an appropriately-sized padding option. Precondition: |msgLen| is the
+// length of a message that already contains an OPT RR.
+func getPadding(msgLen int) dnsmessage.Option {
 	optPadding := dnsmessage.Option{
 		Code: OptResourcePaddingCode,
-		Data: make([]byte, computePaddingSize(msgLen, hasOptRr, PaddingBlockSize)),
+		Data: make([]byte, computePaddingSize(msgLen, PaddingBlockSize)),
 	}
 	return optPadding
 }
@@ -69,42 +65,48 @@ func AddEdnsPadding(rawMsg []byte) ([]byte, error) {
 	// Search for OPT resource and save |optRes| pointer if possible.
 	var optRes *dnsmessage.OPTResource = nil
 	for _, additional := range msg.Additionals {
-		switch additional.Body.(type) {
+		switch body := additional.Body.(type) {
 		case *dnsmessage.OPTResource:
-			optRes = additional.Body.(*dnsmessage.OPTResource)
+			optRes = body
 			break
 		}
 	}
 	if optRes != nil {
 		// Search for a padding Option. If the message already contains
-		// padding, we will respect the application's padding.
+		// padding, we will respect the stub resolver's padding.
 		for _, option := range optRes.Options {
 			if option.Code == OptResourcePaddingCode {
 				return rawMsg, nil
 			}
 		}
+		// At this point, |optRes| points to an OPTResource that does
+		// not contain a padding option.
+	} else {
+		// Create an empty OPTResource (contains no padding option) and
+		// push it into |msg.Additionals|.
+		optRes = &dnsmessage.OPTResource{
+			Options: []dnsmessage.Option{},
+		}
+		msg.Additionals = append(msg.Additionals, dnsmessage.Resource{
+			Header: dnsmessage.ResourceHeader{
+				Name:  dnsmessage.MustNewName("."),
+				Class: dnsmessage.ClassINET,
+				TTL:   0,
+			},
+			Body: optRes,
+		})
 	}
+	// At this point, |msg| contains an OPT resource, and that OPT resource
+	// does not contain a padding option.
 
-	// Build the padding option that we will need. We can't use
-	// the length of |rawMsg|, since its labels may be compressed
-	// differently than the way the Pack function does it.
+	// Compress the message to determine how large it is without padding.
 	compressedMsg, err := msg.Pack()
 	if err != nil {
 		return nil, err
 	}
-	paddingOption := getPadding(len(compressedMsg), false)
-
-	// Append a new OPT resource.
-	msg.Additionals = append(msg.Additionals, dnsmessage.Resource{
-		Header: dnsmessage.ResourceHeader{
-			Name:  dnsmessage.MustNewName("."),
-			Class: dnsmessage.ClassINET,
-			TTL:   0,
-		},
-		Body: &dnsmessage.OPTResource{
-			Options: []dnsmessage.Option{paddingOption},
-		},
-	})
+	// Add a padding option to |msg| that we will round its wire size up to
+	// the nearest block.
+	optRes.Options = append(optRes.Options, getPadding(len(compressedMsg)))
 
 	// Re-pack the message, with compression unconditionally enabled.
 	return msg.Pack()

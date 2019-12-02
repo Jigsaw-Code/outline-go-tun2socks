@@ -674,13 +674,13 @@ func TestAcceptOversize(t *testing.T) {
 }
 
 func TestComputePaddingSize(t *testing.T) {
-	if computePaddingSize(100-kOptRrHeaderLen-kOptPaddingHeaderLen, false, 100) != 0 {
+	if computePaddingSize(100-kOptPaddingHeaderLen, 100) != 0 {
 		t.Errorf("Expected no padding")
 	}
-	if computePaddingSize(200-kOptRrHeaderLen-kOptPaddingHeaderLen, false, 100) != 0 {
+	if computePaddingSize(200-kOptPaddingHeaderLen, 100) != 0 {
 		t.Errorf("Expected no padding")
 	}
-	if computePaddingSize(190-kOptRrHeaderLen-kOptPaddingHeaderLen, false, 100) != 10 {
+	if computePaddingSize(190-kOptPaddingHeaderLen, 100) != 10 {
 		t.Errorf("Expected to pad up to next block")
 	}
 }
@@ -699,7 +699,31 @@ func TestAddEdnsPaddingIdempotent(t *testing.T) {
 	}
 }
 
+// Sanity check that packing |compressedQueryBytes| constructs the same query
+// byte-for-byte.
+func TestDnsMessageCompressedQuerySanityCheck(t *testing.T) {
+	m := mustUnpack(compressedQueryBytes)
+	packedBytes := mustPack(m)
+	if len(packedBytes) != len(compressedQueryBytes) {
+		t.Errorf("Packed query has different size than original:\n  %v\n  %v", packedBytes, compressedQueryBytes)
+	}
+}
+
+// Sanity check that packing |uncompressedQueryBytes| constructs a smaller
+// query byte-for-byte, since label compression is enabled by default.
+func TestDnsMessageUncompressedQuerySanityCheck(t *testing.T) {
+	m := mustUnpack(uncompressedQueryBytes)
+	packedBytes := mustPack(m)
+	if len(packedBytes) >= len(uncompressedQueryBytes) {
+		t.Errorf("Compressed query is not smaller than uncompressed query")
+	}
+}
+
+// Check that we correctly pad an uncompressed query to the nearest block.
 func TestAddEdnsPaddingUncompressedQuery(t *testing.T) {
+	if len(uncompressedQueryBytes)%PaddingBlockSize == 0 {
+		t.Errorf("uncompressedQueryBytes does not require padding, so this test is invalid")
+	}
 	padded, err := AddEdnsPadding(uncompressedQueryBytes)
 	if err != nil {
 		panic(err)
@@ -709,18 +733,73 @@ func TestAddEdnsPaddingUncompressedQuery(t *testing.T) {
 	}
 }
 
-func TestDnsMessageCompressedQuery(t *testing.T) {
-	m := mustUnpack(compressedQueryBytes)
-	packedBytes := mustPack(m)
-	if len(packedBytes) != len(compressedQueryBytes) {
-		t.Errorf("Packed query has different size than original:\n  %v\n  %v", packedBytes, compressedQueryBytes)
+// Check that we correctly pad a compressed query to the nearest block.
+func TestAddEdnsPaddingCompressedQuery(t *testing.T) {
+	if len(compressedQueryBytes)%PaddingBlockSize == 0 {
+		t.Errorf("compressedQueryBytes does not require padding, so this test is invalid")
+	}
+	padded, err := AddEdnsPadding(compressedQueryBytes)
+	if err != nil {
+		panic(err)
+	}
+	if len(padded)%PaddingBlockSize != 0 {
+		t.Errorf("AddEdnsPadding failed to correctly pad compressed query")
 	}
 }
 
-func TestDnsMessageUncompressedQuery(t *testing.T) {
-	m := mustUnpack(uncompressedQueryBytes)
-	packedBytes := mustPack(m)
-	if len(packedBytes) >= len(uncompressedQueryBytes) {
-		t.Errorf("Compressed query is not smaller than uncompressed query")
+// Try to pad a query that already contains an OPT record, but no padding option.
+func TestAddEdnsPaddingCompressedOptQuery(t *testing.T) {
+	optQuery := simpleQuery
+	optQuery.Additionals = append(optQuery.Additionals,
+		dnsmessage.Resource{
+			Header: dnsmessage.ResourceHeader{
+				Name:  dnsmessage.MustNewName("."),
+				Class: dnsmessage.ClassINET,
+				TTL:   0,
+			},
+			Body: &dnsmessage.OPTResource{
+				Options: []dnsmessage.Option{},
+			},
+		},
+	)
+	paddedOnWire, err := AddEdnsPadding(mustPack(&optQuery))
+	if err != nil {
+		t.Errorf("Failed to pad query with OPT but no padding: %v", err)
+	}
+	if len(paddedOnWire)%PaddingBlockSize != 0 {
+		t.Errorf("AddEdnsPadding failed to correctly pad query with OPT but no padding")
+	}
+}
+
+// Try to pad a query that already contains an OPT record with padding. The
+// query should be unmodified by AddEdnsPadding.
+func TestAddEdnsPaddingCompressedPaddedQuery(t *testing.T) {
+	paddedQuery := simpleQuery
+	paddedQuery.Additionals = append(paddedQuery.Additionals,
+		dnsmessage.Resource{
+			Header: dnsmessage.ResourceHeader{
+				Name:  dnsmessage.MustNewName("."),
+				Class: dnsmessage.ClassINET,
+				TTL:   0,
+			},
+			Body: &dnsmessage.OPTResource{
+				Options: []dnsmessage.Option{
+					{
+						Code: OptResourcePaddingCode,
+						Data: make([]byte, 5),
+					},
+				},
+			},
+		},
+	)
+	originalOnWire := mustPack(&paddedQuery)
+
+	paddedOnWire, err := AddEdnsPadding(mustPack(&paddedQuery))
+	if err != nil {
+		t.Errorf("Failed to pad padded query: %v", err)
+	}
+
+	if !bytes.Equal(originalOnWire, paddedOnWire) {
+		t.Errorf("AddEdnsPadding tampered with a query that was already padded")
 	}
 }
