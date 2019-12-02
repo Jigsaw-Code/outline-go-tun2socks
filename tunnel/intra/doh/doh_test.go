@@ -42,7 +42,7 @@ var parsedURL *url.URL
 var simpleQuery dnsmessage.Message = dnsmessage.Message{
 	Header: dnsmessage.Header{
 		ID:                 0xbeef,
-		Response:           true,
+		Response:           false,
 		OpCode:             0,
 		Authoritative:      false,
 		Truncated:          true,
@@ -186,20 +186,32 @@ func TestQueryIntegration(t *testing.T) {
 		0, 1, // QCLASS = IN (Internet)
 	}
 
-	doh, err := NewTransport(testURL, ips, nil, nil)
+	testQuery := func(queryData []byte) {
+
+		doh, err := NewTransport(testURL, ips, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err2 := doh.Query(queryData)
+		if err2 != nil {
+			t.Fatal(err2)
+		}
+		if resp[0] != queryData[0] || resp[1] != queryData[1] {
+			t.Error("Query ID mismatch")
+		}
+		if len(resp) <= len(queryData) {
+			t.Error("Response is short")
+		}
+	}
+
+	testQuery(queryData)
+
+	paddedQueryBytes, err := AddEdnsPadding(simpleQueryBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp, err2 := doh.Query(queryData)
-	if err2 != nil {
-		t.Fatal(err2)
-	}
-	if resp[0] != queryData[0] || resp[1] != queryData[1] {
-		t.Error("Query ID mismatch")
-	}
-	if len(resp) <= len(queryData) {
-		t.Error("Response is short")
-	}
+
+	testQuery(paddedQueryBytes)
 }
 
 type testRoundTripper struct {

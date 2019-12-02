@@ -87,13 +87,13 @@ func AddEdnsPadding(rawMsg []byte) ([]byte, error) {
 		optRes = &dnsmessage.OPTResource{
 			Options: []dnsmessage.Option{},
 		}
+
+		optHeader := dnsmessage.ResourceHeader{}
+		optHeader.SetEDNS0(65535, dnsmessage.RCodeSuccess, false)
+
 		msg.Additionals = append(msg.Additionals, dnsmessage.Resource{
-			Header: dnsmessage.ResourceHeader{
-				Name:  dnsmessage.MustNewName("."),
-				Class: dnsmessage.ClassINET,
-				TTL:   0,
-			},
-			Body: optRes,
+			Header: optHeader,
+			Body:   optRes,
 		})
 	}
 	// At this point, |msg| contains an OPT resource, and that OPT resource
