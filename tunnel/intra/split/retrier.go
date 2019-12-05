@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/getsni"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/protect"
 )
 
 type RetryStats struct {
@@ -116,8 +117,10 @@ const DefaultTimeout time.Duration = 0
 // synackTimeout controls how long to wait for the TCP handshake to complete.
 // If stats is non-nil, it will be populated with retry-related information.
 func DialWithSplitRetry(addr *net.TCPAddr, synackTimeout time.Duration, stats *RetryStats) (DuplexConn, error) {
+	d := protect.Dialer()
+	d.Timeout = synackTimeout
 	before := time.Now()
-	conn, err := (&net.Dialer{Timeout: synackTimeout}).Dial(addr.Network(), addr.String())
+	conn, err := d.Dial(addr.Network(), addr.String())
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +174,7 @@ func (r *retrier) Read(buf []byte) (n int, err error) {
 func (r *retrier) retry(buf []byte) (n int, err error) {
 	r.conn.Close()
 	var newConn *net.TCPConn
-	if newConn, err = net.DialTCP(r.addr.Network(), nil, r.addr); err != nil {
+	if newConn, err = protect.DialTCP(r.addr); err != nil {
 		return
 	}
 	r.conn = newConn

@@ -17,6 +17,8 @@ package split
 import (
 	"io"
 	"net"
+
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/protect"
 )
 
 // DuplexConn represents a bidirectional stream socket.
@@ -36,7 +38,7 @@ type splitter struct {
 // Like net.Conn, it is intended for two-threaded use, with one thread calling
 // Read and CloseRead, and another calling Write, ReadFrom, and CloseWrite.
 func DialWithSplit(addr *net.TCPAddr) (DuplexConn, error) {
-	conn, err := net.DialTCP(addr.Network(), nil, addr)
+	conn, err := protect.DialTCP(addr)
 	if err != nil {
 		return nil, err
 	}

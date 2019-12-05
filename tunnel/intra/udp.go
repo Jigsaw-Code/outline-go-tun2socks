@@ -27,6 +27,7 @@ import (
 	"github.com/eycorsican/go-tun2socks/core"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/doh"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/protect"
 )
 
 // UDPSocketSummary describes a non-DNS UDP association, reported when it is discarded.
@@ -145,7 +146,7 @@ func (h *udpHandler) fetchUDPInput(conn core.UDPConn, t *tracker) {
 
 func (h *udpHandler) Connect(conn core.UDPConn, target *net.UDPAddr) error {
 	bindAddr := &net.UDPAddr{IP: nil, Port: 0}
-	pc, err := net.ListenUDP(bindAddr.Network(), bindAddr)
+	pc, err := protect.ListenUDP(bindAddr)
 	if err != nil {
 		log.Errorf("failed to bind udp address")
 		return err

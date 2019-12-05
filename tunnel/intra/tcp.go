@@ -25,6 +25,7 @@ import (
 	"github.com/eycorsican/go-tun2socks/core"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/doh"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/protect"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/split"
 )
 
@@ -141,7 +142,7 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 			c, err = split.DialWithSplitRetry(target, split.DefaultTimeout, summary.Retry)
 		}
 	} else {
-		c, err = net.DialTCP(target.Network(), nil, target)
+		c, err = protect.DialTCP(target)
 	}
 	if err != nil {
 		return err

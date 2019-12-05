@@ -18,6 +18,8 @@ import (
 	"math/rand"
 	"net"
 	"sync"
+
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/protect"
 )
 
 // IPMap maps hostnames to IPSets.
@@ -93,10 +95,10 @@ func (s *IPSet) add(ip net.IP) {
 // Add one or more IP addresses to the set.
 // The hostname can be a domain name or an IP address.
 func (s *IPSet) Add(hostname string) {
-	resolved, _ := net.LookupIP(hostname)
+	resolved, _ := protect.LookupIPAddr(hostname)
 	s.Lock()
-	for _, ip := range resolved {
-		s.add(ip)
+	for _, addr := range resolved {
+		s.add(addr.IP)
 	}
 	s.Unlock()
 }
