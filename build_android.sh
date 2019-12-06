@@ -30,5 +30,5 @@ if [ ! -z $GO_WORK_DIR ]; then
   echo "Copying JNI binaries from: $GO_WORK_DIR"
   readonly JNI_DIR=$BUILD_DIR/jni
   mkdir -p $JNI_DIR && cp -R $GO_WORK_DIR/android/src/main/jniLibs/ $JNI_DIR/
-#  rm -rf $GO_WORK_DIR
+  rm -rf $GO_WORK_DIR
 fi
