@@ -1,6 +1,7 @@
 package protect
 
 import (
+	"context"
 	"net"
 	"syscall"
 	"testing"
@@ -38,17 +39,19 @@ func verifyMatch(t *testing.T, conn hasSyscallConn, p *fakeProtector) {
 	})
 }
 
-func TestDialer(t *testing.T) {
-	p := &fakeProtector{}
-	d := dialer(p)
-	if d.Control == nil {
-		t.Errorf("Control function is nil")
-	}
+func TestDialTCP(t *testing.T) {
 	l, err := net.Listen("tcp", "localhost:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	go l.Accept()
+
+	p := &fakeProtector{}
+	d := MakeDialer(p)
+	if d.Control == nil {
+		t.Errorf("Control function is nil")
+	}
+
 	conn, err := d.Dial("tcp", l.Addr().String())
 	if err != nil {
 		t.Fatal(err)
@@ -58,39 +61,61 @@ func TestDialer(t *testing.T) {
 	conn.Close()
 }
 
-func TestDialTCP(t *testing.T) {
-	p := &fakeProtector{}
-	l, err := net.Listen("tcp", "localhost:0")
-	if err != nil {
-		t.Fatal(err)
-	}
-	go l.Accept()
-	tcpaddr, err := net.ResolveTCPAddr(l.Addr().Network(), l.Addr().String())
-	if err != nil {
-		t.Fatal(err)
-	}
-	conn, err := dialTCP(p, tcpaddr)
-	verifyMatch(t, conn, p)
-	l.Close()
-	conn.Close()
-}
-
 func TestListenUDP(t *testing.T) {
-	p := &fakeProtector{}
 	udpaddr, err := net.ResolveUDPAddr("udp", "localhost:0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	conn, err := listenUDP(p, udpaddr)
-	verifyMatch(t, conn, p)
+
+	p := &fakeProtector{}
+	c := MakeListenConfig(p)
+
+	conn, err := c.ListenPacket(context.Background(), udpaddr.Network(), udpaddr.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+	verifyMatch(t, conn.(*net.UDPConn), p)
 	conn.Close()
 }
 
 func TestLookupIPAddr(t *testing.T) {
 	p := &fakeProtector{}
-	lookupIPAddr(p, "foo.test.")
+	d := MakeDialer(p)
+	d.Resolver.LookupIPAddr(context.Background(), "foo.test.")
 	// Verify that Protect was called.
 	if len(p.fds) == 0 {
 		t.Fatal("Protect was not called")
 	}
+}
+
+func TestNilDialer(t *testing.T) {
+	l, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go l.Accept()
+
+	d := MakeDialer(nil)
+	conn, err := d.Dial("tcp", l.Addr().String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conn.Close()
+	l.Close()
+}
+
+func TestNilListener(t *testing.T) {
+	udpaddr, err := net.ResolveUDPAddr("udp", "localhost:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c := MakeListenConfig(nil)
+	conn, err := c.ListenPacket(context.Background(), udpaddr.Network(), udpaddr.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	conn.Close()
 }

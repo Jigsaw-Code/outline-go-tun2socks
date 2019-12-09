@@ -24,6 +24,7 @@ import (
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/doh"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/protect"
 )
 
 // IntraListener receives usage statistics when a UDP or TCP socket is closed,
@@ -62,7 +63,10 @@ type intratunnel struct {
 //    These will normally be localhost with a high-numbered port.
 // `dohdns` is the initial DOH transport.
 // TODO: Remove `udpdns` and `tcpdns` once DOH-in-Go is fully rolled out.
-func NewIntraTunnel(fakedns, udpdns, tcpdns string, dohdns doh.Transport, tunWriter io.WriteCloser, listener IntraListener) (IntraTunnel, error) {
+// `tunWriter` is the downstream VPN tunnel
+// `protector` is the socket protector (to avoid the VPN capturing its own output).  May be `nil`.
+// `listener` will be notified at the completion of every tunneled socket.
+func NewIntraTunnel(fakedns, udpdns, tcpdns string, dohdns doh.Transport, tunWriter io.WriteCloser, protector protect.Protector, listener IntraListener) (IntraTunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("Must provide a valid TUN writer")
 	}
@@ -71,7 +75,7 @@ func NewIntraTunnel(fakedns, udpdns, tcpdns string, dohdns doh.Transport, tunWri
 	t := &intratunnel{
 		tunnel: base,
 	}
-	if err := t.registerConnectionHandlers(fakedns, udpdns, tcpdns, listener); err != nil {
+	if err := t.registerConnectionHandlers(fakedns, udpdns, tcpdns, protector, listener); err != nil {
 		return nil, err
 	}
 	if dohdns != nil {
@@ -81,7 +85,7 @@ func NewIntraTunnel(fakedns, udpdns, tcpdns string, dohdns doh.Transport, tunWri
 }
 
 // Registers Intra's custom UDP and TCP connection handlers to the tun2socks core.
-func (t *intratunnel) registerConnectionHandlers(fakedns, udpdns, tcpdns string, listener IntraListener) error {
+func (t *intratunnel) registerConnectionHandlers(fakedns, udpdns, tcpdns string, protector protect.Protector, listener IntraListener) error {
 	// RFC 5382 REQ-5 requires a timeout no shorter than 2 hours and 4 minutes.
 	timeout, _ := time.ParseDuration("2h4m")
 
@@ -93,7 +97,8 @@ func (t *intratunnel) registerConnectionHandlers(fakedns, udpdns, tcpdns string,
 	if err != nil {
 		return err
 	}
-	t.udp = intra.NewUDPHandler(*udpfakedns, *udptruedns, timeout, listener)
+	config := protect.MakeListenConfig(protector)
+	t.udp = intra.NewUDPHandler(*udpfakedns, *udptruedns, timeout, config, listener)
 	core.RegisterUDPConnHandler(t.udp)
 
 	tcpfakedns, err := net.ResolveTCPAddr("tcp", fakedns)
@@ -104,7 +109,8 @@ func (t *intratunnel) registerConnectionHandlers(fakedns, udpdns, tcpdns string,
 	if err != nil {
 		return err
 	}
-	t.tcp = intra.NewTCPHandler(*tcpfakedns, *tcptruedns, listener)
+	dialer := protect.MakeDialer(protector)
+	t.tcp = intra.NewTCPHandler(*tcpfakedns, *tcptruedns, dialer, listener)
 	core.RegisterTCPConnHandler(t.tcp)
 	return nil
 }

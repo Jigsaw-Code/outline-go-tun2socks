@@ -20,6 +20,7 @@ import (
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/doh"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/protect"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
@@ -40,12 +41,12 @@ func init() {
 //
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, dohdns doh.Transport, listener tunnel.IntraListener) (tunnel.IntraTunnel, error) {
+func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, dohdns doh.Transport, protector protect.Protector, listener tunnel.IntraListener) (tunnel.IntraTunnel, error) {
 	tun, err := tunnel.MakeTunFile(fd)
 	if err != nil {
 		return nil, err
 	}
-	t, err := tunnel.NewIntraTunnel(fakedns, udpdns, tcpdns, dohdns, tun, listener)
+	t, err := tunnel.NewIntraTunnel(fakedns, udpdns, tcpdns, dohdns, tun, protector, listener)
 	if err != nil {
 		return nil, err
 	}
@@ -55,13 +56,15 @@ func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, dohdns doh.Trans
 
 // NewDoHTransport returns a DNSTransport that connects to the specified DoH server.
 // `url` is the URL of a DoH server (no template, POST-only).  If it is nonempty, it
-// overrides `udpdns` and `tcpdns`.  `ips` is an optional comma-separated list of
-// IP addresses for the server.  (This wrapper is required because gomobile can't
-// make bindings for []string.)
-func NewDoHTransport(url string, ips string, listener tunnel.IntraListener) (doh.Transport, error) {
+//   overrides `udpdns` and `tcpdns`.
+// `ips` is an optional comma-separated list of IP addresses for the server.  (This
+//   wrapper is required because gomobile can't make bindings for []string.)
+// `protector` is the socket protector to use for all external network activity.
+// `listener` will be notified after each DNS query succeeds or fails.
+func NewDoHTransport(url string, ips string, protector protect.Protector, listener tunnel.IntraListener) (doh.Transport, error) {
 	split := []string{}
 	if len(ips) > 0 {
 		split = strings.Split(ips, ",")
 	}
-	return doh.NewTransport(url, split, listener)
+	return doh.NewTransport(url, split, protector, listener)
 }

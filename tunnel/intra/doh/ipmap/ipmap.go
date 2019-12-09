@@ -15,11 +15,10 @@
 package ipmap
 
 import (
+	"context"
 	"math/rand"
 	"net"
 	"sync"
-
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/protect"
 )
 
 // IPMap maps hostnames to IPSets.
@@ -31,13 +30,18 @@ type IPMap interface {
 }
 
 // NewIPMap returns a fresh IPMap.
-func NewIPMap() IPMap {
-	return &ipMap{m: make(map[string]*IPSet)}
+// `r` will be used to resolve any hostnames passed to `Get` or `Add`.
+func NewIPMap(r *net.Resolver) IPMap {
+	return &ipMap{
+		m: make(map[string]*IPSet),
+		r: r,
+	}
 }
 
 type ipMap struct {
 	sync.RWMutex
 	m map[string]*IPSet
+	r *net.Resolver
 }
 
 func (m *ipMap) Get(hostname string) *IPSet {
@@ -48,8 +52,7 @@ func (m *ipMap) Get(hostname string) *IPSet {
 		return s
 	}
 
-	s = &IPSet{}
-	// Don't hold the ipMap lock during blocking I/O.
+	s = &IPSet{r: m.r}
 	s.Add(hostname)
 
 	m.Lock()
@@ -73,6 +76,7 @@ type IPSet struct {
 	sync.RWMutex
 	ips       []net.IP // All known IPs for the server.
 	confirmed net.IP   // IP address confirmed to be working
+	r         *net.Resolver // Resolver to use for hostname resolution
 }
 
 // Reports whether ip is in the set.  Must be called under RLock.
@@ -95,7 +99,8 @@ func (s *IPSet) add(ip net.IP) {
 // Add one or more IP addresses to the set.
 // The hostname can be a domain name or an IP address.
 func (s *IPSet) Add(hostname string) {
-	resolved, _ := protect.LookupIPAddr(hostname)
+	// Don't hold the ipMap lock during blocking I/O.
+	resolved, _ := s.r.LookupIPAddr(context.TODO(), hostname)
 	s.Lock()
 	for _, addr := range resolved {
 		s.add(addr.IP)

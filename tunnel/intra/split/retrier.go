@@ -23,7 +23,6 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/getsni"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/protect"
 )
 
 type RetryStats struct {
@@ -41,6 +40,7 @@ type retrier struct {
 	// After retryCompletedFlag is closed, these values will not be modified
 	// again so locking is no longer required for reads.
 	mutex   sync.Mutex
+	dialer  *net.Dialer
 	network string
 	addr    *net.TCPAddr
 	// conn is the current underlying connection.  It is only modified by the reader
@@ -114,13 +114,12 @@ const DefaultTimeout time.Duration = 0
 // splitting the initial upstream segment if the socket closes without receiving a
 // reply.  Like net.Conn, it is intended for two-threaded use, with one thread calling
 // Read and CloseRead, and another calling Write, ReadFrom, and CloseWrite.
-// synackTimeout controls how long to wait for the TCP handshake to complete.
-// If stats is non-nil, it will be populated with retry-related information.
-func DialWithSplitRetry(addr *net.TCPAddr, synackTimeout time.Duration, stats *RetryStats) (DuplexConn, error) {
-	d := protect.Dialer()
-	d.Timeout = synackTimeout
+// `dialer` will be used to establish the connection.
+// `addr` is the destination.
+// If `stats` is non-nil, it will be populated with retry-related information.
+func DialWithSplitRetry(dialer *net.Dialer, addr *net.TCPAddr, stats *RetryStats) (DuplexConn, error) {
 	before := time.Now()
-	conn, err := d.Dial(addr.Network(), addr.String())
+	conn, err := dialer.Dial(addr.Network(), addr.String())
 	if err != nil {
 		return nil, err
 	}
@@ -133,6 +132,7 @@ func DialWithSplitRetry(addr *net.TCPAddr, synackTimeout time.Duration, stats *R
 	}
 
 	r := &retrier{
+		dialer:            dialer,
 		addr:              addr,
 		conn:              conn.(*net.TCPConn),
 		timeout:           timeout(before, after),
@@ -173,11 +173,11 @@ func (r *retrier) Read(buf []byte) (n int, err error) {
 
 func (r *retrier) retry(buf []byte) (n int, err error) {
 	r.conn.Close()
-	var newConn *net.TCPConn
-	if newConn, err = protect.DialTCP(r.addr); err != nil {
+	var newConn net.Conn
+	if newConn, err = r.dialer.Dial(r.addr.Network(), r.addr.String()); err != nil {
 		return
 	}
-	r.conn = newConn
+	r.conn = newConn.(*net.TCPConn)
 	first, second := splitHello(r.hello)
 	r.stats.Split = int16(len(first))
 	if _, err = r.conn.Write(first); err != nil {

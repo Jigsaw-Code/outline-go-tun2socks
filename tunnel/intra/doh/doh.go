@@ -32,6 +32,7 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/doh/ipmap"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/protect"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/split"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
@@ -88,6 +89,7 @@ type transport struct {
 	port     int
 	ips      ipmap.IPMap
 	client   http.Client
+	dialer   *net.Dialer
 	listener Listener
 }
 
@@ -115,7 +117,7 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 	confirmed := ips.Confirmed()
 	if confirmed != nil {
 		log.Debugf("Trying confirmed IP %s for addr %s", confirmed.String(), addr)
-		if conn, err = split.DialWithSplitRetry(tcpaddr(confirmed), tcpTimeout, nil); err == nil {
+		if conn, err = split.DialWithSplitRetry(t.dialer, tcpaddr(confirmed), nil); err == nil {
 			log.Infof("Confirmed IP %s worked", confirmed.String())
 			return conn, nil
 		}
@@ -129,7 +131,7 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 			// Don't try this IP twice.
 			continue
 		}
-		if conn, err = split.DialWithSplitRetry(tcpaddr(ip), tcpTimeout, nil); err == nil {
+		if conn, err = split.DialWithSplitRetry(t.dialer, tcpaddr(ip), nil); err == nil {
 			log.Infof("Found working IP: %s", ip.String())
 			return conn, nil
 		}
@@ -137,11 +139,15 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 	return nil, err
 }
 
-// NewDoHTransport returns a DoH DNSTransport, ready for use.
+// NewTransport returns a DoH DNSTransport, ready for use.
 // This is a POST-only DoH implementation, so the DoH template should be a URL.
-// addrs is a list of domains or IP addresses to use as fallback, if the hostname
-// lookup fails or returns non-working addresses.
-func NewTransport(rawurl string, addrs []string, listener Listener) (Transport, error) {
+// `rawurl` is the DoH template in string form.
+// `addrs` is a list of domains or IP addresses to use as fallback, if the hostname
+//   lookup fails or returns non-working addresses.
+// `protector` is the socket protector to apply to all outbound sockets, to ensure
+//   they aren't routed back into the VPN.
+// `listener` will receive the status of each DNS query when it is complete.
+func NewTransport(rawurl string, addrs []string, protector protect.Protector, listener Listener) (Transport, error) {
 	parsedurl, err := url.Parse(rawurl)
 	if err != nil {
 		return nil, err
@@ -160,12 +166,17 @@ func NewTransport(rawurl string, addrs []string, listener Listener) (Transport, 
 	} else {
 		port = 443
 	}
+
+	d := protect.MakeDialer(protector)
+	d.Timeout = tcpTimeout
+
 	t := &transport{
 		url:      rawurl,
 		hostname: parsedurl.Hostname(),
 		port:     port,
 		listener: listener,
-		ips:      ipmap.NewIPMap(),
+		dialer:   d,
+		ips:      ipmap.NewIPMap(d.Resolver),
 	}
 	ips := t.ips.Get(t.hostname)
 	for _, addr := range addrs {

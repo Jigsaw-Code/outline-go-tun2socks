@@ -15,12 +15,14 @@
 package ipmap
 
 import (
+	"context"
+	"errors"
 	"net"
 	"testing"
 )
 
 func TestGetTwice(t *testing.T) {
-	m := NewIPMap()
+	m := NewIPMap(nil)
 	a := m.Get("example")
 	b := m.Get("example")
 	if a != b {
@@ -29,7 +31,7 @@ func TestGetTwice(t *testing.T) {
 }
 
 func TestGetInvalid(t *testing.T) {
-	m := NewIPMap()
+	m := NewIPMap(nil)
 	s := m.Get("example")
 	if !s.Empty() {
 		t.Error("Invalid name should result in an empty set")
@@ -40,7 +42,7 @@ func TestGetInvalid(t *testing.T) {
 }
 
 func TestGetDomain(t *testing.T) {
-	m := NewIPMap()
+	m := NewIPMap(nil)
 	s := m.Get("www.google.com")
 	if s.Empty() {
 		t.Error("Google lookup failed")
@@ -55,7 +57,7 @@ func TestGetDomain(t *testing.T) {
 }
 
 func TestGetIP(t *testing.T) {
-	m := NewIPMap()
+	m := NewIPMap(nil)
 	s := m.Get("192.0.2.1")
 	if s.Empty() {
 		t.Error("IP parsing failed")
@@ -70,7 +72,7 @@ func TestGetIP(t *testing.T) {
 }
 
 func TestAddDomain(t *testing.T) {
-	m := NewIPMap()
+	m := NewIPMap(nil)
 	s := m.Get("example")
 	s.Add("www.google.com")
 	if s.Empty() {
@@ -85,7 +87,7 @@ func TestAddDomain(t *testing.T) {
 	}
 }
 func TestAddIP(t *testing.T) {
-	m := NewIPMap()
+	m := NewIPMap(nil)
 	s := m.Get("example")
 	s.Add("192.0.2.1")
 	ips := s.GetAll()
@@ -98,7 +100,7 @@ func TestAddIP(t *testing.T) {
 }
 
 func TestConfirmed(t *testing.T) {
-	m := NewIPMap()
+	m := NewIPMap(nil)
 	s := m.Get("www.google.com")
 	if s.Confirmed() != nil {
 		t.Error("Confirmed should start out nil")
@@ -117,7 +119,7 @@ func TestConfirmed(t *testing.T) {
 }
 
 func TestConfirmNew(t *testing.T) {
-	m := NewIPMap()
+	m := NewIPMap(nil)
 	s := m.Get("example")
 	s.Add("192.0.2.1")
 	// Confirm a new address.
@@ -132,7 +134,7 @@ func TestConfirmNew(t *testing.T) {
 }
 
 func TestDisconfirmMismatch(t *testing.T) {
-	m := NewIPMap()
+	m := NewIPMap(nil)
 	s := m.Get("www.google.com")
 	ips := s.GetAll()
 	s.Confirm(ips[0])
@@ -147,5 +149,24 @@ func TestDisconfirmMismatch(t *testing.T) {
 
 	if !ips[0].Equal(s.Confirmed()) {
 		t.Error("Mismatched disconfirmation")
+	}
+}
+
+func TestResolver(t *testing.T) {
+	flag := false
+	resolver := &net.Resolver{
+		PreferGo: true,
+		Dial: func(context context.Context, network, address string) (net.Conn, error) {
+			flag = true
+			return nil, errors.New("Fake dialer")
+		},
+	}
+	m := NewIPMap(resolver)
+	s := m.Get("www.google.com")
+	if !s.Empty() {
+		t.Error("Google lookup should have failed due to fake dialer")
+	}
+	if !flag {
+		t.Error("Fake dialer didn't run")
 	}
 }
