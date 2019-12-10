@@ -62,7 +62,10 @@ type intratunnel struct {
 //    These will normally be localhost with a high-numbered port.
 // `dohdns` is the initial DOH transport.
 // TODO: Remove `udpdns` and `tcpdns` once DOH-in-Go is fully rolled out.
-func NewIntraTunnel(fakedns, udpdns, tcpdns string, dohdns doh.Transport, tunWriter io.WriteCloser, listener IntraListener) (IntraTunnel, error) {
+// `tunWriter` is the downstream VPN tunnel
+// `dialer` and `config` will be used for all network activity.
+// `listener` will be notified at the completion of every tunneled socket.
+func NewIntraTunnel(fakedns, udpdns, tcpdns string, dohdns doh.Transport, tunWriter io.WriteCloser, dialer *net.Dialer, config *net.ListenConfig, listener IntraListener) (IntraTunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("Must provide a valid TUN writer")
 	}
@@ -71,7 +74,7 @@ func NewIntraTunnel(fakedns, udpdns, tcpdns string, dohdns doh.Transport, tunWri
 	t := &intratunnel{
 		tunnel: base,
 	}
-	if err := t.registerConnectionHandlers(fakedns, udpdns, tcpdns, listener); err != nil {
+	if err := t.registerConnectionHandlers(fakedns, udpdns, tcpdns, dialer, config, listener); err != nil {
 		return nil, err
 	}
 	if dohdns != nil {
@@ -81,7 +84,7 @@ func NewIntraTunnel(fakedns, udpdns, tcpdns string, dohdns doh.Transport, tunWri
 }
 
 // Registers Intra's custom UDP and TCP connection handlers to the tun2socks core.
-func (t *intratunnel) registerConnectionHandlers(fakedns, udpdns, tcpdns string, listener IntraListener) error {
+func (t *intratunnel) registerConnectionHandlers(fakedns, udpdns, tcpdns string, dialer *net.Dialer, config *net.ListenConfig, listener IntraListener) error {
 	// RFC 5382 REQ-5 requires a timeout no shorter than 2 hours and 4 minutes.
 	timeout, _ := time.ParseDuration("2h4m")
 
@@ -93,7 +96,7 @@ func (t *intratunnel) registerConnectionHandlers(fakedns, udpdns, tcpdns string,
 	if err != nil {
 		return err
 	}
-	t.udp = intra.NewUDPHandler(*udpfakedns, *udptruedns, timeout, listener)
+	t.udp = intra.NewUDPHandler(*udpfakedns, *udptruedns, timeout, config, listener)
 	core.RegisterUDPConnHandler(t.udp)
 
 	tcpfakedns, err := net.ResolveTCPAddr("tcp", fakedns)
@@ -104,7 +107,7 @@ func (t *intratunnel) registerConnectionHandlers(fakedns, udpdns, tcpdns string,
 	if err != nil {
 		return err
 	}
-	t.tcp = intra.NewTCPHandler(*tcpfakedns, *tcptruedns, listener)
+	t.tcp = intra.NewTCPHandler(*tcpfakedns, *tcptruedns, dialer, listener)
 	core.RegisterTCPConnHandler(t.tcp)
 	return nil
 }

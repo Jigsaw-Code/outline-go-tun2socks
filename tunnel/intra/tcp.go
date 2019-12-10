@@ -41,6 +41,7 @@ type tcpHandler struct {
 	truedns          net.TCPAddr
 	dns              doh.Atomic
 	alwaysSplitHTTPS bool
+	dialer           *net.Dialer
 	listener         TCPListener
 }
 
@@ -61,13 +62,14 @@ type TCPListener interface {
 }
 
 // NewTCPHandler returns a TCP forwarder with Intra-style behavior.
-// Currently this class only redirects DNS traffic to a
-// specified server.  (This should be rare for TCP.)
-// All other traffic is forwarded unmodified.
-func NewTCPHandler(fakedns, truedns net.TCPAddr, listener TCPListener) TCPHandler {
+// Connections to `fakedns` are redirected to `truedns`.  (This should be rare for TCP.)
+// All other traffic is forwarded using `dialer`.
+// `listener` is provided with a summary of each socket when it is closed.
+func NewTCPHandler(fakedns, truedns net.TCPAddr, dialer *net.Dialer, listener TCPListener) TCPHandler {
 	return &tcpHandler{
 		fakedns:  fakedns,
 		truedns:  truedns,
+		dialer:   dialer,
 		listener: listener,
 	}
 }
@@ -135,13 +137,17 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 	// TODO: Cancel dialing if c is closed.
 	if summary.ServerPort == 443 {
 		if h.alwaysSplitHTTPS {
-			c, err = split.DialWithSplit(target)
+			c, err = split.DialWithSplit(h.dialer, target)
 		} else {
 			summary.Retry = &split.RetryStats{}
-			c, err = split.DialWithSplitRetry(target, split.DefaultTimeout, summary.Retry)
+			c, err = split.DialWithSplitRetry(h.dialer, target, summary.Retry)
 		}
 	} else {
-		c, err = net.DialTCP(target.Network(), nil, target)
+		var generic net.Conn
+		generic, err = h.dialer.Dial(target.Network(), target.String())
+		if generic != nil {
+			c = generic.(*net.TCPConn)
+		}
 	}
 	if err != nil {
 		return err

@@ -17,6 +17,7 @@
 package intra
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -70,6 +71,7 @@ type udpHandler struct {
 	fakedns  net.UDPAddr
 	truedns  net.UDPAddr
 	dns      doh.Atomic
+	config   *net.ListenConfig
 	listener UDPListener
 }
 
@@ -79,12 +81,16 @@ type udpHandler struct {
 // Similarly, packets arriving from `truedns` have the source address replaced
 // with `fakedns`.
 // TODO: Remove truedns once DOH is working well
-func NewUDPHandler(fakedns, truedns net.UDPAddr, timeout time.Duration, listener UDPListener) UDPHandler {
+// `timeout` controls the effective NAT mapping lifetime.
+// `config` is used to bind new external UDP ports.
+// `listener` receives a summary about each UDP binding when it expires.
+func NewUDPHandler(fakedns, truedns net.UDPAddr, timeout time.Duration, config *net.ListenConfig, listener UDPListener) UDPHandler {
 	return &udpHandler{
 		timeout:  timeout,
 		udpConns: make(map[core.UDPConn]*tracker, 8),
 		fakedns:  fakedns,
 		truedns:  truedns,
+		config:   config,
 		listener: listener,
 	}
 }
@@ -145,12 +151,12 @@ func (h *udpHandler) fetchUDPInput(conn core.UDPConn, t *tracker) {
 
 func (h *udpHandler) Connect(conn core.UDPConn, target *net.UDPAddr) error {
 	bindAddr := &net.UDPAddr{IP: nil, Port: 0}
-	pc, err := net.ListenUDP(bindAddr.Network(), bindAddr)
+	pc, err := h.config.ListenPacket(context.TODO(), bindAddr.Network(), bindAddr.String())
 	if err != nil {
 		log.Errorf("failed to bind udp address")
 		return err
 	}
-	t := makeTracker(pc)
+	t := makeTracker(pc.(*net.UDPConn))
 	h.Lock()
 	h.udpConns[conn] = t
 	h.Unlock()

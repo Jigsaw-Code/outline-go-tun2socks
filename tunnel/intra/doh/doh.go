@@ -88,6 +88,7 @@ type transport struct {
 	port     int
 	ips      ipmap.IPMap
 	client   http.Client
+	dialer   *net.Dialer
 	listener Listener
 }
 
@@ -115,7 +116,7 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 	confirmed := ips.Confirmed()
 	if confirmed != nil {
 		log.Debugf("Trying confirmed IP %s for addr %s", confirmed.String(), addr)
-		if conn, err = split.DialWithSplitRetry(tcpaddr(confirmed), tcpTimeout, nil); err == nil {
+		if conn, err = split.DialWithSplitRetry(t.dialer, tcpaddr(confirmed), nil); err == nil {
 			log.Infof("Confirmed IP %s worked", confirmed.String())
 			return conn, nil
 		}
@@ -129,7 +130,7 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 			// Don't try this IP twice.
 			continue
 		}
-		if conn, err = split.DialWithSplitRetry(tcpaddr(ip), tcpTimeout, nil); err == nil {
+		if conn, err = split.DialWithSplitRetry(t.dialer, tcpaddr(ip), nil); err == nil {
 			log.Infof("Found working IP: %s", ip.String())
 			return conn, nil
 		}
@@ -137,11 +138,15 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 	return nil, err
 }
 
-// NewDoHTransport returns a DoH DNSTransport, ready for use.
+// NewTransport returns a DoH DNSTransport, ready for use.
 // This is a POST-only DoH implementation, so the DoH template should be a URL.
-// addrs is a list of domains or IP addresses to use as fallback, if the hostname
-// lookup fails or returns non-working addresses.
-func NewTransport(rawurl string, addrs []string, listener Listener) (Transport, error) {
+// `rawurl` is the DoH template in string form.
+// `addrs` is a list of domains or IP addresses to use as fallback, if the hostname
+//   lookup fails or returns non-working addresses.
+// `dialer` is the dialer that the transport will use.  The transport will modify the dialer's
+//   timeout but will not mutate it otherwise.
+// `listener` will receive the status of each DNS query when it is complete.
+func NewTransport(rawurl string, addrs []string, dialer *net.Dialer, listener Listener) (Transport, error) {
 	parsedurl, err := url.Parse(rawurl)
 	if err != nil {
 		return nil, err
@@ -160,12 +165,14 @@ func NewTransport(rawurl string, addrs []string, listener Listener) (Transport, 
 	} else {
 		port = 443
 	}
+
 	t := &transport{
 		url:      rawurl,
 		hostname: parsedurl.Hostname(),
 		port:     port,
 		listener: listener,
-		ips:      ipmap.NewIPMap(),
+		dialer:   dialer,
+		ips:      ipmap.NewIPMap(dialer.Resolver),
 	}
 	ips := t.ips.Get(t.hostname)
 	for _, addr := range addrs {

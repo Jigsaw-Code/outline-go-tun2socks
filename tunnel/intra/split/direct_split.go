@@ -35,13 +35,13 @@ type splitter struct {
 // DialWithSplit returns a TCP connection that always splits the initial upstream segment.
 // Like net.Conn, it is intended for two-threaded use, with one thread calling
 // Read and CloseRead, and another calling Write, ReadFrom, and CloseWrite.
-func DialWithSplit(addr *net.TCPAddr) (DuplexConn, error) {
-	conn, err := net.DialTCP(addr.Network(), nil, addr)
+func DialWithSplit(d *net.Dialer, addr *net.TCPAddr) (DuplexConn, error) {
+	conn, err := d.Dial(addr.Network(), addr.String())
 	if err != nil {
 		return nil, err
 	}
 
-	return &splitter{TCPConn: conn}, nil
+	return &splitter{TCPConn: conn.(*net.TCPConn)}, nil
 }
 
 // Write-related functions
