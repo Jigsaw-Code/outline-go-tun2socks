@@ -32,7 +32,6 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/doh/ipmap"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/protect"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/split"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
@@ -144,10 +143,10 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 // `rawurl` is the DoH template in string form.
 // `addrs` is a list of domains or IP addresses to use as fallback, if the hostname
 //   lookup fails or returns non-working addresses.
-// `protector` is the socket protector to apply to all outbound sockets, to ensure
-//   they aren't routed back into the VPN.
+// `dialer` is the dialer that the transport will use.  The transport will modify the dialer's
+//   timeout but will not mutate it otherwise.
 // `listener` will receive the status of each DNS query when it is complete.
-func NewTransport(rawurl string, addrs []string, protector protect.Protector, listener Listener) (Transport, error) {
+func NewTransport(rawurl string, addrs []string, dialer *net.Dialer, listener Listener) (Transport, error) {
 	parsedurl, err := url.Parse(rawurl)
 	if err != nil {
 		return nil, err
@@ -167,16 +166,13 @@ func NewTransport(rawurl string, addrs []string, protector protect.Protector, li
 		port = 443
 	}
 
-	d := protect.MakeDialer(protector)
-	d.Timeout = tcpTimeout
-
 	t := &transport{
 		url:      rawurl,
 		hostname: parsedurl.Hostname(),
 		port:     port,
 		listener: listener,
-		dialer:   d,
-		ips:      ipmap.NewIPMap(d.Resolver),
+		dialer:   dialer,
+		ips:      ipmap.NewIPMap(dialer.Resolver),
 	}
 	ips := t.ips.Get(t.hostname)
 	for _, addr := range addrs {

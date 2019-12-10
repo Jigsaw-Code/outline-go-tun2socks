@@ -38,6 +38,9 @@ func init() {
 //   The port is normally 53.
 // `udpdns` and `tcpdns` are the location of the actual DNS server being used.  For DNS
 //   tunneling in Intra, these are typically high-numbered ports on localhost.
+// `dohdns` is the initial DoH transport.  If non-nil, it overrides `truedns`.
+// `protector` is a wrapper for Android's VpnService.protect() method.
+// `listener` will be provided with a summary of each TCP and UDP socket when it is closed.
 //
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
@@ -46,7 +49,9 @@ func ConnectIntraTunnel(fd int, fakedns, udpdns, tcpdns string, dohdns doh.Trans
 	if err != nil {
 		return nil, err
 	}
-	t, err := tunnel.NewIntraTunnel(fakedns, udpdns, tcpdns, dohdns, tun, protector, listener)
+	dialer := protect.MakeDialer(protector)
+	config := protect.MakeListenConfig(protector)
+	t, err := tunnel.NewIntraTunnel(fakedns, udpdns, tcpdns, dohdns, tun, dialer, config, listener)
 	if err != nil {
 		return nil, err
 	}
@@ -66,5 +71,6 @@ func NewDoHTransport(url string, ips string, protector protect.Protector, listen
 	if len(ips) > 0 {
 		split = strings.Split(ips, ",")
 	}
-	return doh.NewTransport(url, split, protector, listener)
+	dialer := protect.MakeDialer(protector)
+	return doh.NewTransport(url, split, dialer, listener)
 }
