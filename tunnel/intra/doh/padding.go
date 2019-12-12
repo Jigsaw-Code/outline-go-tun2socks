@@ -89,7 +89,11 @@ func AddEdnsPadding(rawMsg []byte) ([]byte, error) {
 		}
 
 		optHeader := dnsmessage.ResourceHeader{}
-		optHeader.SetEDNS0(65535, dnsmessage.RCodeSuccess, false)
+		// SetEDNS0(udpPayloadLen int, extRCode RCode, dnssecOK bool) error
+		err := optHeader.SetEDNS0(65535, dnsmessage.RCodeSuccess, false)
+		if err != nil {
+			return nil, err
+		}
 
 		msg.Additionals = append(msg.Additionals, dnsmessage.Resource{
 			Header: optHeader,

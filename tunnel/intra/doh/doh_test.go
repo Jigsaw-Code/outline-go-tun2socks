@@ -700,11 +700,11 @@ func TestComputePaddingSize(t *testing.T) {
 func TestAddEdnsPaddingIdempotent(t *testing.T) {
 	padded, err := AddEdnsPadding(simpleQueryBytes)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	paddedAgain, err := AddEdnsPadding(padded)
 	if err != nil {
-		panic(err)
+		t.Fatal(err)
 	}
 	if !bytes.Equal(padded, paddedAgain) {
 		t.Errorf("Padding should be idempotent\n%v\n%v", padded, paddedAgain)
@@ -762,6 +762,9 @@ func TestAddEdnsPaddingCompressedQuery(t *testing.T) {
 // Try to pad a query that already contains an OPT record, but no padding option.
 func TestAddEdnsPaddingCompressedOptQuery(t *testing.T) {
 	optQuery := simpleQuery
+	optQuery.Additionals = make([]dnsmessage.Resource, len(simpleQuery.Additionals))
+	copy(optQuery.Additionals, simpleQuery.Additionals)
+
 	optQuery.Additionals = append(optQuery.Additionals,
 		dnsmessage.Resource{
 			Header: dnsmessage.ResourceHeader{
@@ -787,6 +790,9 @@ func TestAddEdnsPaddingCompressedOptQuery(t *testing.T) {
 // query should be unmodified by AddEdnsPadding.
 func TestAddEdnsPaddingCompressedPaddedQuery(t *testing.T) {
 	paddedQuery := simpleQuery
+	paddedQuery.Additionals = make([]dnsmessage.Resource, len(simpleQuery.Additionals))
+	copy(paddedQuery.Additionals, simpleQuery.Additionals)
+
 	paddedQuery.Additionals = append(paddedQuery.Additionals,
 		dnsmessage.Resource{
 			Header: dnsmessage.ResourceHeader{
