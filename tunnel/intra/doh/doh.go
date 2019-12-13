@@ -147,6 +147,9 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 //   timeout but will not mutate it otherwise.
 // `listener` will receive the status of each DNS query when it is complete.
 func NewTransport(rawurl string, addrs []string, dialer *net.Dialer, listener Listener) (Transport, error) {
+	if dialer == nil {
+		dialer = &net.Dialer{}
+	}
 	parsedurl, err := url.Parse(rawurl)
 	if err != nil {
 		return nil, err
