@@ -227,6 +227,14 @@ func (t *transport) doQuery(q []byte) (response []byte, server *net.TCPAddr, qer
 		qerr = &queryError{BadQuery, fmt.Errorf("Query length is %d", len(q))}
 		return
 	}
+
+	// Add padding to the raw query
+	q, err := AddEdnsPadding(q)
+	if err != nil {
+		qerr = &queryError{InternalError, err}
+		return
+	}
+
 	// Zero out the query ID.
 	id := binary.BigEndian.Uint16(q)
 	binary.BigEndian.PutUint16(q, 0)

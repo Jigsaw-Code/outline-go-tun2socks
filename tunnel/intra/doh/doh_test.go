@@ -24,7 +24,10 @@ import (
 	"net/http"
 	"net/http/httptrace"
 	"net/url"
+	"reflect"
 	"testing"
+
+	"golang.org/x/net/dns/dnsmessage"
 )
 
 var testURL = "https://dns.google/dns-query"
@@ -35,6 +38,89 @@ var ips = []string{
 	"2001:4860:4860::8844",
 }
 var parsedURL *url.URL
+
+var simpleQuery dnsmessage.Message = dnsmessage.Message{
+	Header: dnsmessage.Header{
+		ID:                 0xbeef,
+		Response:           false,
+		OpCode:             0,
+		Authoritative:      false,
+		Truncated:          true,
+		RecursionDesired:   false,
+		RecursionAvailable: false,
+		RCode:              0,
+	},
+	Questions: []dnsmessage.Question{
+		{
+			Name:  dnsmessage.MustNewName("www.example.com."),
+			Type:  dnsmessage.TypeA,
+			Class: dnsmessage.ClassINET,
+		}},
+	Answers:     []dnsmessage.Resource{},
+	Authorities: []dnsmessage.Resource{},
+	Additionals: []dnsmessage.Resource{},
+}
+
+func mustPack(m *dnsmessage.Message) []byte {
+	packed, err := m.Pack()
+	if err != nil {
+		panic(err)
+	}
+	return packed
+}
+
+func mustUnpack(q []byte) *dnsmessage.Message {
+	var m dnsmessage.Message
+	err := m.Unpack(q)
+	if err != nil {
+		panic(err)
+	}
+	return &m
+}
+
+var simpleQueryBytes []byte = mustPack(&simpleQuery)
+
+var compressedQueryBytes []byte = []byte{
+	0xbe, 0xef, // ID
+	0x01,       // QR, OPCODE, AA, TC, RD
+	0x00,       // RA, Z, RCODE
+	0x00, 0x02, // QDCOUNT = 2
+	0x00, 0x00, // ANCOUNT = 0
+	0x00, 0x00, // NSCOUNT = 0
+	0x00, 0x00, // ARCOUNT = 0
+	// Question 1
+	0x03, 'f', 'o', 'o',
+	0x03, 'b', 'a', 'r',
+	0x00,
+	0x00, 0x01, // QTYPE: A query
+	0x00, 0x01, // QCLASS: IN
+	// Question 2
+	0xc0, 12, // Pointer to beginning of "foo.bar."
+	0x00, 0x01, // QTYPE: A query
+	0x00, 0x01, // QCLASS: IN
+}
+
+var uncompressedQueryBytes []byte = []byte{
+	0xbe, 0xef, // ID
+	0x01,       // QR, OPCODE, AA, TC, RD
+	0x00,       // RA, Z, RCODE
+	0x00, 0x02, // QDCOUNT = 2
+	0x00, 0x00, // ANCOUNT = 0
+	0x00, 0x00, // NSCOUNT = 0
+	0x00, 0x00, // ARCOUNT = 0
+	// Question 1
+	0x03, 'f', 'o', 'o',
+	0x03, 'b', 'a', 'r',
+	0x00,
+	0x00, 0x01, // QTYPE: A query
+	0x00, 0x01, // QCLASS: IN
+	// Question 2
+	0x03, 'f', 'o', 'o',
+	0x03, 'b', 'a', 'r',
+	0x00,
+	0x00, 0x01, // QTYPE: A query
+	0x00, 0x01, // QCLASS: IN
+}
 
 func init() {
 	parsedURL, _ = url.Parse(testURL)
@@ -100,20 +186,32 @@ func TestQueryIntegration(t *testing.T) {
 		0, 1, // QCLASS = IN (Internet)
 	}
 
-	doh, err := NewTransport(testURL, ips, nil, nil)
+	testQuery := func(queryData []byte) {
+
+		doh, err := NewTransport(testURL, ips, nil, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp, err2 := doh.Query(queryData)
+		if err2 != nil {
+			t.Fatal(err2)
+		}
+		if resp[0] != queryData[0] || resp[1] != queryData[1] {
+			t.Error("Query ID mismatch")
+		}
+		if len(resp) <= len(queryData) {
+			t.Error("Response is short")
+		}
+	}
+
+	testQuery(queryData)
+
+	paddedQueryBytes, err := AddEdnsPadding(simpleQueryBytes)
 	if err != nil {
 		t.Fatal(err)
 	}
-	resp, err2 := doh.Query(queryData)
-	if err2 != nil {
-		t.Fatal(err2)
-	}
-	if resp[0] != queryData[0] || resp[1] != queryData[1] {
-		t.Error("Query ID mismatch")
-	}
-	if len(resp) <= len(queryData) {
-		t.Error("Response is short")
-	}
+
+	testQuery(paddedQueryBytes)
 }
 
 type testRoundTripper struct {
@@ -144,7 +242,7 @@ func TestRequest(t *testing.T) {
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
-	go doh.Query([]byte{1, 2, 3, 4, 5})
+	go doh.Query(simpleQueryBytes)
 	req := <-rt.req
 	if req.URL.String() != testURL {
 		t.Errorf("URL mismatch: %s != %s", req.URL.String(), testURL)
@@ -153,9 +251,20 @@ func TestRequest(t *testing.T) {
 	if err != nil {
 		t.Error(err)
 	}
-	// The first two bytes are the ID, so they should be set to zero.
-	if !bytes.Equal([]byte{0, 0, 3, 4, 5}, reqBody) {
-		t.Errorf("Unexpected request body %v", reqBody)
+	if len(reqBody)%PaddingBlockSize != 0 {
+		t.Errorf("reqBody has unexpected length: %d", len(reqBody))
+	}
+	// Parse reqBody into a Message.
+	newQuery := mustUnpack(reqBody)
+	// Ensure the converted request has an ID of zero.
+	if newQuery.Header.ID != 0 {
+		t.Errorf("Unexpected request header id: %v", newQuery.Header.ID)
+	}
+	// Check that all fields except for Header.ID and Additionals
+	// are the same as the original.  Additionals may differ if
+	// padding was added.
+	if !queriesMostlyEqual(simpleQuery, *newQuery) {
+		t.Errorf("Unexpected query body:\n\t%v\nExpected:\n\t%v", newQuery, simpleQuery)
 	}
 	contentType := req.Header.Get("Content-Type")
 	if contentType != "application/dns-message" {
@@ -165,6 +274,15 @@ func TestRequest(t *testing.T) {
 	if accept != "application/dns-message" {
 		t.Errorf("Wrong Accept header: %s", accept)
 	}
+}
+
+// Check that all fields of m1 match those of m2, except for Header.ID
+// and Additionals.
+func queriesMostlyEqual(m1 dnsmessage.Message, m2 dnsmessage.Message) bool {
+	// Make fields we don't care about match, so that equality check is easy.
+	m1.Header.ID = m2.Header.ID
+	m1.Additionals = m2.Additionals
+	return reflect.DeepEqual(m1, m2)
 }
 
 // Check that a DOH response is returned correctly.
@@ -184,16 +302,23 @@ func TestResponse(t *testing.T) {
 			Request:    &http.Request{URL: parsedURL},
 		}
 		// The DOH response should have a zero query ID.
-		w.Write([]byte{0, 0, 8, 9, 10})
+		var modifiedQuery dnsmessage.Message = simpleQuery
+		modifiedQuery.Header.ID = 0
+		w.Write(mustPack(&modifiedQuery))
 		w.Close()
 	}()
 
-	resp, err := doh.Query([]byte{1, 2, 3, 4, 5})
+	resp, err := doh.Query(simpleQueryBytes)
 	if err != nil {
 		t.Error(err)
 	}
+
+	// Parse the response as a DNS message.
+	respParsed := mustUnpack(resp)
+
 	// Query() should reconstitute the query ID in the response.
-	if !bytes.Equal([]byte{1, 2, 8, 9, 10}, resp) {
+	if respParsed.Header.ID != simpleQuery.Header.ID ||
+		!queriesMostlyEqual(*respParsed, simpleQuery) {
 		t.Errorf("Unexpected response %v", resp)
 	}
 }
@@ -219,7 +344,7 @@ func TestEmptyResponse(t *testing.T) {
 		}
 	}()
 
-	_, err := doh.Query([]byte{1, 2, 3, 4, 5})
+	_, err := doh.Query(simpleQueryBytes)
 	var qerr *queryError
 	if err == nil {
 		t.Error("Empty body should cause an error")
@@ -249,7 +374,7 @@ func TestHTTPError(t *testing.T) {
 		w.Close()
 	}()
 
-	_, err := doh.Query([]byte{1, 2, 3, 4, 5})
+	_, err := doh.Query(simpleQueryBytes)
 	var qerr *queryError
 	if err == nil {
 		t.Error("Empty body should cause an error")
@@ -268,7 +393,7 @@ func TestSendFailed(t *testing.T) {
 	transport.client.Transport = rt
 
 	rt.err = errors.New("test")
-	_, err := doh.Query([]byte{1, 2, 3, 4, 5})
+	_, err := doh.Query(simpleQueryBytes)
 	var qerr *queryError
 	if err == nil {
 		t.Error("Send failure should be reported")
@@ -331,15 +456,15 @@ func TestListener(t *testing.T) {
 		w.Close()
 	}()
 
-	doh.Query([]byte{1, 2, 3, 4, 5})
+	doh.Query(simpleQueryBytes)
 	s := listener.summary
 	if s.Latency < 0 {
 		t.Errorf("Negative latency: %f", s.Latency)
 	}
-	if !bytes.Equal(s.Query, []byte{1, 2, 3, 4, 5}) {
+	if !bytes.Equal(s.Query, simpleQueryBytes) {
 		t.Errorf("Wrong query: %v", s.Query)
 	}
-	if !bytes.Equal(s.Response, []byte{1, 2, 8, 9, 10}) {
+	if !bytes.Equal(s.Response, []byte{0xbe, 0xef, 8, 9, 10}) {
 		t.Errorf("Wrong response: %v", s.Response)
 	}
 	if s.Server != "192.0.2.2" {
@@ -420,7 +545,7 @@ func TestAccept(t *testing.T) {
 
 	lbuf := make([]byte, 2)
 	// Send Query
-	queryData := []byte{1, 2, 3, 4, 5}
+	queryData := simpleQueryBytes
 	binary.BigEndian.PutUint16(lbuf, uint16(len(queryData)))
 	n, err := client.Write(lbuf)
 	if err != nil {
@@ -479,7 +604,7 @@ func TestAcceptFail(t *testing.T) {
 
 	lbuf := make([]byte, 2)
 	// Send Query
-	queryData := []byte{1, 2, 3, 4, 5}
+	queryData := simpleQueryBytes
 	binary.BigEndian.PutUint16(lbuf, uint16(len(queryData)))
 	client.Write(lbuf)
 	client.Write(queryData)
@@ -511,7 +636,7 @@ func TestAcceptClose(t *testing.T) {
 
 	lbuf := make([]byte, 2)
 	// Send Query
-	queryData := []byte{1, 2, 3, 4, 5}
+	queryData := simpleQueryBytes
 	binary.BigEndian.PutUint16(lbuf, uint16(len(queryData)))
 	client.Write(lbuf)
 	client.Write(queryData)
@@ -541,7 +666,7 @@ func TestAcceptOversize(t *testing.T) {
 
 	lbuf := make([]byte, 2)
 	// Send Query
-	queryData := []byte{1, 2, 3, 4, 5}
+	queryData := simpleQueryBytes
 	binary.BigEndian.PutUint16(lbuf, uint16(len(queryData)))
 	client.Write(lbuf)
 	client.Write(queryData)
@@ -557,5 +682,142 @@ func TestAcceptOversize(t *testing.T) {
 	n, _ := client.Read(lbuf)
 	if n != 0 {
 		t.Error("Expected to read 0 bytes")
+	}
+}
+
+func TestComputePaddingSize(t *testing.T) {
+	if computePaddingSize(100-kOptPaddingHeaderLen, 100) != 0 {
+		t.Errorf("Expected no padding")
+	}
+	if computePaddingSize(200-kOptPaddingHeaderLen, 100) != 0 {
+		t.Errorf("Expected no padding")
+	}
+	if computePaddingSize(190-kOptPaddingHeaderLen, 100) != 10 {
+		t.Errorf("Expected to pad up to next block")
+	}
+}
+
+func TestAddEdnsPaddingIdempotent(t *testing.T) {
+	padded, err := AddEdnsPadding(simpleQueryBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paddedAgain, err := AddEdnsPadding(padded)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(padded, paddedAgain) {
+		t.Errorf("Padding should be idempotent\n%v\n%v", padded, paddedAgain)
+	}
+}
+
+// Sanity check that packing |compressedQueryBytes| constructs the same query
+// byte-for-byte.
+func TestDnsMessageCompressedQuerySanityCheck(t *testing.T) {
+	m := mustUnpack(compressedQueryBytes)
+	packedBytes := mustPack(m)
+	if len(packedBytes) != len(compressedQueryBytes) {
+		t.Errorf("Packed query has different size than original:\n  %v\n  %v", packedBytes, compressedQueryBytes)
+	}
+}
+
+// Sanity check that packing |uncompressedQueryBytes| constructs a smaller
+// query byte-for-byte, since label compression is enabled by default.
+func TestDnsMessageUncompressedQuerySanityCheck(t *testing.T) {
+	m := mustUnpack(uncompressedQueryBytes)
+	packedBytes := mustPack(m)
+	if len(packedBytes) >= len(uncompressedQueryBytes) {
+		t.Errorf("Compressed query is not smaller than uncompressed query")
+	}
+}
+
+// Check that we correctly pad an uncompressed query to the nearest block.
+func TestAddEdnsPaddingUncompressedQuery(t *testing.T) {
+	if len(uncompressedQueryBytes)%PaddingBlockSize == 0 {
+		t.Errorf("uncompressedQueryBytes does not require padding, so this test is invalid")
+	}
+	padded, err := AddEdnsPadding(uncompressedQueryBytes)
+	if err != nil {
+		panic(err)
+	}
+	if len(padded)%PaddingBlockSize != 0 {
+		t.Errorf("AddEdnsPadding failed to correctly pad uncompressed query")
+	}
+}
+
+// Check that we correctly pad a compressed query to the nearest block.
+func TestAddEdnsPaddingCompressedQuery(t *testing.T) {
+	if len(compressedQueryBytes)%PaddingBlockSize == 0 {
+		t.Errorf("compressedQueryBytes does not require padding, so this test is invalid")
+	}
+	padded, err := AddEdnsPadding(compressedQueryBytes)
+	if err != nil {
+		panic(err)
+	}
+	if len(padded)%PaddingBlockSize != 0 {
+		t.Errorf("AddEdnsPadding failed to correctly pad compressed query")
+	}
+}
+
+// Try to pad a query that already contains an OPT record, but no padding option.
+func TestAddEdnsPaddingCompressedOptQuery(t *testing.T) {
+	optQuery := simpleQuery
+	optQuery.Additionals = make([]dnsmessage.Resource, len(simpleQuery.Additionals))
+	copy(optQuery.Additionals, simpleQuery.Additionals)
+
+	optQuery.Additionals = append(optQuery.Additionals,
+		dnsmessage.Resource{
+			Header: dnsmessage.ResourceHeader{
+				Name:  dnsmessage.MustNewName("."),
+				Class: dnsmessage.ClassINET,
+				TTL:   0,
+			},
+			Body: &dnsmessage.OPTResource{
+				Options: []dnsmessage.Option{},
+			},
+		},
+	)
+	paddedOnWire, err := AddEdnsPadding(mustPack(&optQuery))
+	if err != nil {
+		t.Errorf("Failed to pad query with OPT but no padding: %v", err)
+	}
+	if len(paddedOnWire)%PaddingBlockSize != 0 {
+		t.Errorf("AddEdnsPadding failed to correctly pad query with OPT but no padding")
+	}
+}
+
+// Try to pad a query that already contains an OPT record with padding. The
+// query should be unmodified by AddEdnsPadding.
+func TestAddEdnsPaddingCompressedPaddedQuery(t *testing.T) {
+	paddedQuery := simpleQuery
+	paddedQuery.Additionals = make([]dnsmessage.Resource, len(simpleQuery.Additionals))
+	copy(paddedQuery.Additionals, simpleQuery.Additionals)
+
+	paddedQuery.Additionals = append(paddedQuery.Additionals,
+		dnsmessage.Resource{
+			Header: dnsmessage.ResourceHeader{
+				Name:  dnsmessage.MustNewName("."),
+				Class: dnsmessage.ClassINET,
+				TTL:   0,
+			},
+			Body: &dnsmessage.OPTResource{
+				Options: []dnsmessage.Option{
+					{
+						Code: OptResourcePaddingCode,
+						Data: make([]byte, 5),
+					},
+				},
+			},
+		},
+	)
+	originalOnWire := mustPack(&paddedQuery)
+
+	paddedOnWire, err := AddEdnsPadding(mustPack(&paddedQuery))
+	if err != nil {
+		t.Errorf("Failed to pad padded query: %v", err)
+	}
+
+	if !bytes.Equal(originalOnWire, paddedOnWire) {
+		t.Errorf("AddEdnsPadding tampered with a query that was already padded")
 	}
 }
