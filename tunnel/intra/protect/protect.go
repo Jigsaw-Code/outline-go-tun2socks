@@ -15,18 +15,30 @@
 package protect
 
 import (
+	"context"
+	"errors"
+	"fmt"
 	"net"
+	"strings"
 	"syscall"
 )
 
-// Protector is a wrapper for Android's VpnService.protect().
+// Protector provides the ability to bypass a VPN on Android, pre-Lollipop.
 type Protector interface {
 	// Protect a socket, i.e. exclude it from the VPN.
 	// This is needed in order to avoid routing loops for the VPN's own sockets.
+	// This is a wrapper for Android's VpnService.protect().
 	Protect(socket int32) bool
+
+	// Returns a comma-separated list of the system's configured DNS resolvers,
+	// in roughly descending priority order.
+	// This is needed because (1) Android Java cannot protect DNS lookups but Go can, and
+	// (2) Android Java can determine the list of system DNS resolvers but Go cannot.
+	// A comma-separated list is used because Gomobile cannot bind []string.
+	GetResolvers() string
 }
 
-func makeControl(p Protector) (func(string, string, syscall.RawConn) error) {
+func makeControl(p Protector) func(string, string, syscall.RawConn) error {
 	return func(network, address string, c syscall.RawConn) error {
 		return c.Control(func(fd uintptr) {
 			if !p.Protect(int32(fd)) {
@@ -34,6 +46,46 @@ func makeControl(p Protector) (func(string, string, syscall.RawConn) error) {
 			}
 		})
 	}
+}
+
+// Returns the first IP address that is of the desired family.
+func scan(ips []string, wantV4 bool) string {
+	for _, ip := range ips {
+		parsed := net.ParseIP(ip)
+		if parsed == nil {
+			// `ip` failed to parse.  Skip it.
+			continue
+		}
+		isV4 := parsed.To4() != nil
+		if isV4 == wantV4 {
+			return ip
+		}
+	}
+	return ""
+}
+
+// Given a slice of IP addresses, and a transport address, return a transport
+// address with the IP replaced by the first IP of the same family in `ips`, or
+// by the first address of a different family if there are none of the same.
+func replaceIP(addr string, ips []string) (string, error) {
+	if len(ips) == 0 {
+		return "", errors.New("No resolvers available")
+	}
+	orighost, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return "", err
+	}
+	origip := net.ParseIP(orighost)
+	if origip == nil {
+		return "", fmt.Errorf("Can't parse resolver IP: %s", orighost)
+	}
+	isV4 := origip.To4() != nil
+	newIP := scan(ips, isV4)
+	if newIP == "" {
+		// There are no IPs of the desired address family.  Use a different family.
+		newIP = ips[0]
+	}
+	return net.JoinHostPort(newIP, port), nil
 }
 
 // MakeDialer creates a new Dialer.  Recipients can safely mutate
@@ -45,9 +97,17 @@ func MakeDialer(p Protector) *net.Dialer {
 	d := &net.Dialer{
 		Control: makeControl(p),
 	}
+	resolverDialer := func(ctx context.Context, network, address string) (net.Conn, error) {
+		resolvers := strings.Split(p.GetResolvers(), ",")
+		newAddress, err := replaceIP(address, resolvers)
+		if err != nil {
+			return nil, err
+		}
+		return d.DialContext(ctx, network, newAddress)
+	}
 	d.Resolver = &net.Resolver{
 		PreferGo: true,
-		Dial: d.DialContext,
+		Dial:     resolverDialer,
 	}
 	return d
 }
@@ -58,7 +118,7 @@ func MakeListenConfig(p Protector) *net.ListenConfig {
 	if p == nil {
 		return &net.ListenConfig{}
 	}
-	return &net.ListenConfig {
+	return &net.ListenConfig{
 		Control: makeControl(p),
 	}
 }

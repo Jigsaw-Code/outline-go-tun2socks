@@ -18,6 +18,10 @@ func (p *fakeProtector) Protect(fd int32) bool {
 	return true
 }
 
+func (p *fakeProtector) GetResolvers() string {
+	return "8.8.8.8,2001:4860:4860::8888"
+}
+
 // This interface serves as a supertype of net.TCPConn and net.UDPConn, so
 // that they can share the verifyMatch() function.
 type hasSyscallConn interface {

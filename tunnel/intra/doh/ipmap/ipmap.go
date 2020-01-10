@@ -19,6 +19,8 @@ import (
 	"math/rand"
 	"net"
 	"sync"
+
+	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
 // IPMap maps hostnames to IPSets.
@@ -74,8 +76,8 @@ func (m *ipMap) Get(hostname string) *IPSet {
 // One IP can be marked as confirmed to be working correctly.
 type IPSet struct {
 	sync.RWMutex
-	ips       []net.IP // All known IPs for the server.
-	confirmed net.IP   // IP address confirmed to be working
+	ips       []net.IP      // All known IPs for the server.
+	confirmed net.IP        // IP address confirmed to be working
 	r         *net.Resolver // Resolver to use for hostname resolution
 }
 
@@ -100,7 +102,10 @@ func (s *IPSet) add(ip net.IP) {
 // The hostname can be a domain name or an IP address.
 func (s *IPSet) Add(hostname string) {
 	// Don't hold the ipMap lock during blocking I/O.
-	resolved, _ := s.r.LookupIPAddr(context.TODO(), hostname)
+	resolved, err := s.r.LookupIPAddr(context.TODO(), hostname)
+	if err != nil {
+		log.Warnf("Failed to resolve %s: %v", hostname, err)
+	}
 	s.Lock()
 	for _, addr := range resolved {
 		s.add(addr.IP)
