@@ -104,7 +104,7 @@ func (s *IPSet) Add(hostname string) {
 	// Don't hold the ipMap lock during blocking I/O.
 	resolved, err := s.r.LookupIPAddr(context.TODO(), hostname)
 	if err != nil {
-		log.Infof("Error resolving %s: %v", hostname, err)
+		log.Warnf("Failed to resolve %s: %v", hostname, err)
 	}
 	s.Lock()
 	for _, addr := range resolved {

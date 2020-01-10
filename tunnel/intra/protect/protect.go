@@ -17,6 +17,7 @@ package protect
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"syscall"
@@ -47,10 +48,16 @@ func makeControl(p Protector) func(string, string, syscall.RawConn) error {
 	}
 }
 
-// Returns the first IP address that is of the specified length (i.e. family).
-func scan(ips []string, l int) string {
+// Returns the first IP address that is of the desired family.
+func scan(ips []string, wantV4 bool) string {
 	for _, ip := range ips {
-		if len(net.ParseIP(ip)) == l {
+		parsed := net.ParseIP(ip)
+		if parsed == nil {
+			// `ip` failed to parse.  Skip it.
+			continue
+		}
+		isV4 := parsed.To4() != nil
+		if isV4 == wantV4 {
 			return ip
 		}
 	}
@@ -68,8 +75,14 @@ func replaceIP(addr string, ips []string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	newIP := scan(ips, len(net.ParseIP(orighost)))
+	origip := net.ParseIP(orighost)
+	if origip == nil {
+		return "", fmt.Errorf("Can't parse resolver IP: %s", orighost)
+	}
+	isV4 := origip.To4() != nil
+	newIP := scan(ips, isV4)
 	if newIP == "" {
+		// There are no IPs of the desired address family.  Use a different family.
 		newIP = ips[0]
 	}
 	return net.JoinHostPort(newIP, port), nil
