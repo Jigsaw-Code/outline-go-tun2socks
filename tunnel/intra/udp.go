@@ -45,15 +45,12 @@ type UDPListener interface {
 type tracker struct {
 	conn     *net.UDPConn
 	start    time.Time
-	upload   int64 // bytes
-	download int64 // bytes
-	// Parameters used to implement the single-query socket optimization:
-	complex bool   // True if the socket is not a oneshot DNS query.
-	queryid uint16 // The DNS query ID for this socket, if there is one.
+	upload   int64 // Non-DNS upload bytes
+	download int64 // Non-DNS download bytes
 }
 
 func makeTracker(conn *net.UDPConn) *tracker {
-	return &tracker{conn, time.Now(), 0, 0, false, 0}
+	return &tracker{conn, time.Now(), 0, 0}
 }
 
 // UDPHandler adds DOH support to the base UDPConnHandler interface.
@@ -64,42 +61,30 @@ type UDPHandler interface {
 
 type udpHandler struct {
 	UDPHandler
-	sync.Mutex
+	sync.RWMutex
 
 	timeout  time.Duration
 	udpConns map[core.UDPConn]*tracker
 	fakedns  net.UDPAddr
-	truedns  net.UDPAddr
-	dns      doh.Atomic
+	dns      doh.Transport
 	config   *net.ListenConfig
 	listener UDPListener
 }
 
 // NewUDPHandler makes a UDP handler with Intra-style DNS redirection:
 // All packets are routed directly to their destination, except packets whose
-// destination is `fakedns`.  Those packets are redirected to `truedns`.
-// Similarly, packets arriving from `truedns` have the source address replaced
-// with `fakedns`.
-// TODO: Remove truedns once DOH is working well
+// destination is `fakedns`.  Those packets are redirected to DOH.
 // `timeout` controls the effective NAT mapping lifetime.
 // `config` is used to bind new external UDP ports.
 // `listener` receives a summary about each UDP binding when it expires.
-func NewUDPHandler(fakedns, truedns net.UDPAddr, timeout time.Duration, config *net.ListenConfig, listener UDPListener) UDPHandler {
+func NewUDPHandler(fakedns net.UDPAddr, timeout time.Duration, config *net.ListenConfig, listener UDPListener) UDPHandler {
 	return &udpHandler{
 		timeout:  timeout,
 		udpConns: make(map[core.UDPConn]*tracker, 8),
 		fakedns:  fakedns,
-		truedns:  truedns,
 		config:   config,
 		listener: listener,
 	}
-}
-
-func queryid(data []byte) int32 {
-	if len(data) < 2 {
-		return -1
-	}
-	return 0xFFFF & ((int32(data[0]) << 8) | int32(data[1]))
 }
 
 func (h *udpHandler) fetchUDPInput(conn core.UDPConn, t *tracker) {
@@ -118,32 +103,10 @@ func (h *udpHandler) fetchUDPInput(conn core.UDPConn, t *tracker) {
 		}
 
 		udpaddr := addr.(*net.UDPAddr)
-		if udpaddr.IP.Equal(h.truedns.IP) && udpaddr.Port == h.truedns.Port {
-			// Pretend that the reply was from the fake DNS server.
-			udpaddr = &h.fakedns
-			if n < 2 {
-				// Very short packet, cannot possibly be DNS.
-				t.complex = true
-			} else {
-				responseid := queryid(buf)
-				if t.queryid != uint16(responseid) {
-					// Something very strange is going on
-					t.complex = true
-				}
-			}
-		} else {
-			// This socket has been used for non-DNS traffic.
-			t.complex = true
-		}
 		t.download += int64(n)
 		_, err = conn.WriteFrom(buf[:n], udpaddr)
 		if err != nil {
 			log.Warnf("failed to write UDP data to TUN")
-			return
-		}
-		if !t.complex {
-			// This socket has only been used for DNS traffic, and just got a response.
-			// UDP DNS sockets are typically only used for one response.
 			return
 		}
 	}
@@ -168,20 +131,26 @@ func (h *udpHandler) Connect(conn core.UDPConn, target *net.UDPAddr) error {
 func (h *udpHandler) doDoh(dns doh.Transport, t *tracker, conn core.UDPConn, data []byte) {
 	resp, err := dns.Query(data)
 	if err == nil {
-		conn.WriteFrom(resp, &h.fakedns)
-	} else {
+		_, err = conn.WriteFrom(resp, &h.fakedns)
+	}
+	if err != nil {
 		log.Warnf("DoH query failed: %v", err)
 	}
-	if !t.complex {
+	// Note: Reading t.upload and t.download on this thread, while they are written on
+	// other threads, is theoretically a race condition.  In practice, this race is
+	// impossible on 64-bit platforms, likely impossible on 32-bit platforms, and
+	// low-impact if it occurs (a mixed-use socket might be closed early).
+	if t.upload == 0 && t.download == 0 {
 		// conn was only used for this DNS query, so it's unlikely to be used again.
 		h.Close(conn)
 	}
 }
 
 func (h *udpHandler) ReceiveTo(conn core.UDPConn, data []byte, addr *net.UDPAddr) error {
-	h.Lock()
+	h.RLock()
+	dns := h.dns
 	t, ok1 := h.udpConns[conn]
-	h.Unlock()
+	h.RUnlock()
 
 	if !ok1 {
 		return fmt.Errorf("connection %v->%v does not exists", conn.LocalAddr(), addr)
@@ -191,31 +160,9 @@ func (h *udpHandler) ReceiveTo(conn core.UDPConn, data []byte, addr *net.UDPAddr
 	t.conn.SetDeadline(time.Now().Add(h.timeout))
 
 	if addr.IP.Equal(h.fakedns.IP) && addr.Port == h.fakedns.Port {
-		id := queryid(data)
-		if id < 0 {
-			t.complex = true
-		} else if t.upload == 0 {
-			t.queryid = uint16(id)
-		} else if t.queryid != uint16(id) {
-			t.complex = true
-		}
-		if t.upload > 0 && !t.complex {
-			// This packet is a retry, presumably because the DoH query is slow.
-			// Ignore the retry to avoid making redundant DoH queries.
-			return nil
-		}
-		dns := h.dns.Load()
-		if dns != nil {
-			// Use DOH.
-			t.upload += int64(len(data))
-			dataCopy := append([]byte{}, data...)
-			go h.doDoh(dns, t, conn, dataCopy)
-			return nil
-		}
-		// Send the query to the real DNS server.
-		addr = &h.truedns
-	} else {
-		t.complex = true
+		dataCopy := append([]byte{}, data...)
+		go h.doDoh(dns, t, conn, dataCopy)
+		return nil
 	}
 	t.upload += int64(len(data))
 	_, err := t.conn.WriteTo(data, addr)
@@ -242,5 +189,7 @@ func (h *udpHandler) Close(conn core.UDPConn) {
 }
 
 func (h *udpHandler) SetDNS(dns doh.Transport) {
-	h.dns.Store(dns)
+	h.Lock()
+	h.dns = dns
+	h.Unlock()
 }

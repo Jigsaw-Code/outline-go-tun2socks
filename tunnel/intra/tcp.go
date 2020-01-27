@@ -38,7 +38,6 @@ type TCPHandler interface {
 type tcpHandler struct {
 	TCPHandler
 	fakedns          net.TCPAddr
-	truedns          net.TCPAddr
 	dns              doh.Atomic
 	alwaysSplitHTTPS bool
 	dialer           *net.Dialer
@@ -62,13 +61,12 @@ type TCPListener interface {
 }
 
 // NewTCPHandler returns a TCP forwarder with Intra-style behavior.
-// Connections to `fakedns` are redirected to `truedns`.  (This should be rare for TCP.)
+// Connections to `fakedns` are redirected to DOH.
 // All other traffic is forwarded using `dialer`.
 // `listener` is provided with a summary of each socket when it is closed.
-func NewTCPHandler(fakedns, truedns net.TCPAddr, dialer *net.Dialer, listener TCPListener) TCPHandler {
+func NewTCPHandler(fakedns net.TCPAddr, dialer *net.Dialer, listener TCPListener) TCPHandler {
 	return &tcpHandler{
 		fakedns:  fakedns,
-		truedns:  truedns,
 		dialer:   dialer,
 		listener: listener,
 	}
@@ -123,11 +121,8 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 	// DNS override
 	if target.IP.Equal(h.fakedns.IP) && target.Port == h.fakedns.Port {
 		dns := h.dns.Load()
-		if dns != nil {
-			go doh.Accept(dns, conn)
-			return nil
-		}
-		target = &h.truedns
+		go doh.Accept(dns, conn)
+		return nil
 	}
 	var summary TCPSocketSummary
 	summary.ServerPort = filteredPort(target)
