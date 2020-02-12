@@ -16,6 +16,8 @@ package main
 
 import (
 	"crypto/tls"
+	"flag"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -24,30 +26,38 @@ import (
 )
 
 func main() {
-	if len(os.Args) < 2 {
-		log.Printf("Usage: %s destination [SNI]", os.Args[0])
-		log.Printf("This tool attempts TLS connection to the destination (port 443), with and without splitting.")
-		log.Printf("If the SNI is specified, it overrides the destination, which can be an IP address.")
+	flag.Usage = func() {
+		fmt.Fprintf(flag.CommandLine.Output(), "Usage: %s [-sni=SNI] destination\n", os.Args[0])
+		fmt.Fprintln(flag.CommandLine.Output(), "This tool attempts a TLS connection to the "+
+			"destination (port 443), with and without splitting.  If the SNI is specified, it "+
+			"overrides the destination, which can be an IP address.")
+		flag.PrintDefaults()
+	}
+
+	sni := flag.String("sni", "", "Server name override")
+	flag.Parse()
+	destination := flag.Arg(0)
+	if destination == "" {
+		flag.Usage()
 		return
 	}
-	destination := os.Args[1]
+
 	addr, err := net.ResolveTCPAddr("tcp", net.JoinHostPort(destination, "443"))
 	if err != nil {
-		log.Println("Couldn't resolve destination")
-		return
+		log.Fatalf("Couldn't resolve destination: %v", err)
 	}
-	sni := destination
-	if len(os.Args) > 2 {
-		sni = os.Args[2]
+
+	if *sni == "" {
+		*sni = destination
 	}
+	tlsConfig := &tls.Config{ServerName: *sni}
 
 	log.Println("Trying direct connection")
 	conn, err := net.DialTCP(addr.Network(), nil, addr)
 	if err != nil {
-		log.Printf("Could not establish a TCP connection: %v", err)
-		return
+		log.Fatalf("Could not establish a TCP connection: %v", err)
 	}
-	tlsConn := tls.Client(conn, &tls.Config{ServerName: sni})
+	tlsConn := tls.Client(conn, tlsConfig)
 	err = tlsConn.Handshake()
 	if err != nil {
 		log.Printf("Direct TLS handshake failed: %v", err)
@@ -58,14 +68,12 @@ func main() {
 	log.Println("Trying split connection")
 	splitConn, err := split.DialWithSplit(&net.Dialer{}, addr)
 	if err != nil {
-		log.Printf("Could not establish a splitting socket: %v", err)
-		return
+		log.Fatalf("Could not establish a splitting socket: %v", err)
 	}
-	tlsConn2 := tls.Client(splitConn, &tls.Config{ServerName: sni})
+	tlsConn2 := tls.Client(splitConn, tlsConfig)
 	err = tlsConn2.Handshake()
 	if err != nil {
 		log.Printf("Split TLS handshake failed: %v", err)
-		return
 	} else {
 		log.Printf("Split TLS succeeded")
 	}
