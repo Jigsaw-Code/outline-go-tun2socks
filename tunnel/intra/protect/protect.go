@@ -44,6 +44,7 @@ func makeControl(p Protector) func(string, string, syscall.RawConn) error {
 	return func(network, address string, c syscall.RawConn) error {
 		return c.Control(func(fd uintptr) {
 			if !p.Protect(int32(fd)) {
+				// TODO: Record and report these errors.
 				log.Errorf("Failed to protect a %s socket", network)
 			}
 		})
