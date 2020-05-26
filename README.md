@@ -1,6 +1,6 @@
 # outline-go-tun2socks
 
-Go package for building [go-tun2socks](https://github.com/eycorsican/go-tun2socks) libraries for macOS, iOS, and Android. Builds go-tun2socks binaries for Linux and Windows.
+Go package for building [go-tun2socks](https://github.com/eycorsican/go-tun2socks)-based clients for [Outline](https://getoutline.org) and [Intra](https://getintra.org) (now with support for [Choir](https://github.com/Jigsaw-Code/choir) metrics).  For macOS, iOS, and Android, the output is a library; for Linux and Windows it is a command-line executable.
 
 ## Prerequisites
 
