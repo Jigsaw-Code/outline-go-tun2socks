@@ -104,11 +104,11 @@ func (r *tcpSNIReporter) Report(summary TCPSocketSummary) {
 	}
 	resultValue, err := choir.NewValue(result)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Bad result %s: %v", result, err)
 	}
 	responseValue, err := choir.NewValue(response)
 	if err != nil {
-		panic(err)
+		log.Fatalf("Bad response %s: %v", response, err)
 	}
 	if err := reporter.Report(summary.Retry.SNI, resultValue, responseValue); err != nil {
 		log.Warnf("Choir report failed: %v", err)
