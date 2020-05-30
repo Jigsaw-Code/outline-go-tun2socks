@@ -33,6 +33,7 @@ type TCPHandler interface {
 	core.TCPConnHandler
 	SetDNS(doh.Transport)
 	SetAlwaysSplitHTTPS(bool)
+	EnableSNIReporter(file io.ReadWriter, suffix, country string) error
 }
 
 type tcpHandler struct {
@@ -42,6 +43,7 @@ type tcpHandler struct {
 	alwaysSplitHTTPS bool
 	dialer           *net.Dialer
 	listener         TCPListener
+	sniReporter      tcpSNIReporter
 }
 
 // TCPSocketSummary provides information about each TCP socket, reported when it is closed.
@@ -136,6 +138,9 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 		} else {
 			summary.Retry = &split.RetryStats{}
 			c, err = split.DialWithSplitRetry(h.dialer, target, summary.Retry)
+			if summary.Retry.Split != 0 {
+				h.sniReporter.Report(summary)
+			}
 		}
 	} else {
 		var generic net.Conn
@@ -155,8 +160,13 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 
 func (h *tcpHandler) SetDNS(dns doh.Transport) {
 	h.dns.Store(dns)
+	h.sniReporter.SetDNS(dns)
 }
 
 func (h *tcpHandler) SetAlwaysSplitHTTPS(s bool) {
 	h.alwaysSplitHTTPS = s
+}
+
+func (h *tcpHandler) EnableSNIReporter(file io.ReadWriter, suffix, country string) error {
+	return h.sniReporter.Configure(file, suffix, country)
 }
