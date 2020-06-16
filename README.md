@@ -10,7 +10,7 @@ Go package for building [go-tun2socks](https://github.com/eycorsican/go-tun2sock
 - Go >= 1.14
 - A C compiler (e.g.: clang, gcc)
 - [gomobile](https://github.com/golang/go/wiki/Mobile) (iOS, macOS, Android)
-- [xgo](https://github.com/karalabe/xgo) (Windows, Linux)
+- [xgo](https://github.com/techknowlogick/xgo) (Windows, Linux)
 - Docker (Windows, Linux)
 - Other common utilities (e.g.: git)
 
