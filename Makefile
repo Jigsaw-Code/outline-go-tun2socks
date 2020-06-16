@@ -3,12 +3,10 @@ GOBIND=$(GOMOBILE) bind
 XGOCMD=xgo
 BUILDDIR=$(shell pwd)/build
 IMPORT_PATH=github.com/Jigsaw-Code/outline-go-tun2socks
-ELECTRON_PATH=$(GOPATH)/src/$(IMPORT_PATH)/outline/electron
+ELECTRON_PATH=$(IMPORT_PATH)/outline/electron
 LDFLAGS='-s -w'
 ANDROID_LDFLAGS='-w' # Don't strip Android debug symbols so we can upload them to crash reporting tools.
 TUN2SOCKS_VERSION=v1.16.7
-TUN2SOCKS_SRC_PATH=$(GOPATH)/src/github.com/eycorsican/go-tun2socks
-TUN2SOCKS_MOD_PATH=$(GOPATH)/pkg/mod/github.com/eycorsican/go-tun2socks\@$(TUN2SOCKS_VERSION)
 XGO_LDFLAGS='-s -w -X main.version=$(TUN2SOCKS_VERSION)'
 
 ANDROID_BUILDDIR=$(BUILDDIR)/android
@@ -20,36 +18,17 @@ MACOS_ARTIFACT=$(MACOS_BUILDDIR)/Tun2socks.framework
 WINDOWS_BUILDDIR=$(BUILDDIR)/windows
 LINUX_BUILDDIR=$(BUILDDIR)/linux
 
-ANDROID_BUILD_CMD="GO111MODULE=off $(GOBIND) -a -ldflags $(ANDROID_LDFLAGS) -target=android -tags android -work -o $(ANDROID_ARTIFACT)"
+ANDROID_BUILD_CMD="$(GOBIND) -a -ldflags $(ANDROID_LDFLAGS) -target=android -tags android -work -o $(ANDROID_ARTIFACT)"
 ANDROID_OUTLINE_BUILD_CMD="$(ANDROID_BUILD_CMD) $(IMPORT_PATH)/outline/android $(IMPORT_PATH)/outline/shadowsocks"
 ANDROID_INTRA_BUILD_CMD="$(ANDROID_BUILD_CMD) $(IMPORT_PATH)/intra $(IMPORT_PATH)/tunnel $(IMPORT_PATH)/tunnel/intra $(IMPORT_PATH)/tunnel/intra/doh $(IMPORT_PATH)/tunnel/intra/split $(IMPORT_PATH)/tunnel/intra/protect"
-IOS_BUILD_CMD="GO111MODULE=off $(GOBIND) -a -ldflags $(LDFLAGS) -bundleid org.outline.tun2socks -target=ios/arm,ios/arm64 -tags ios -o $(IOS_ARTIFACT) $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks"
-MACOS_BUILD_CMD="GO111MODULE=off ./tools/$(GOBIND) -a -ldflags $(LDFLAGS) -bundleid org.outline.tun2socks -target=ios/amd64 -tags ios -o $(MACOS_ARTIFACT) $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks"
+IOS_BUILD_CMD="$(GOBIND) -a -ldflags $(LDFLAGS) -bundleid org.outline.tun2socks -target=ios/arm,ios/arm64 -tags ios -o $(IOS_ARTIFACT) $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks"
+MACOS_BUILD_CMD="./tools/$(GOBIND) -a -ldflags $(LDFLAGS) -bundleid org.outline.tun2socks -target=ios/amd64 -tags ios -o $(MACOS_ARTIFACT) $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks"
 WINDOWS_BUILD_CMD="$(XGOCMD) -ldflags $(XGO_LDFLAGS) --targets=windows/386 -dest $(WINDOWS_BUILDDIR) $(ELECTRON_PATH)"
 LINUX_BUILD_CMD="$(XGOCMD) -ldflags $(XGO_LDFLAGS) --targets=linux/amd64 -dest $(LINUX_BUILDDIR) $(ELECTRON_PATH)"
 
 define build
-	$(call modularize)
 	mkdir -p $(1)
 	eval $(2)
-	$(call undo_modularize)
-endef
-
-# Workaround to modularize go-tun2socks and gomobile.
-define modularize
-	# gomobile does not yet support modules.
-	# Symlink the current module and the go-tun2socks module in $GOPATH.
-	# go-tun2socks should not be in $GOPATH for this to work.
-	# See https://github.com/golang/go/issues/27234
-	mkdir -p $(GOPATH)/src/$(shell dirname $(IMPORT_PATH))
-	ln -s $(shell pwd) $(GOPATH)/src/$(IMPORT_PATH)
-	mkdir -p $(shell dirname $(TUN2SOCKS_SRC_PATH))
-	ln -s $(TUN2SOCKS_MOD_PATH) $(TUN2SOCKS_SRC_PATH)
-endef
-
-define undo_modularize
-	rm $(GOPATH)/src/$(IMPORT_PATH) || true
-	rm $(TUN2SOCKS_SRC_PATH) || true
 endef
 
 .PHONY: android-outline android-intra ios linux macos windows clean
@@ -76,4 +55,3 @@ windows:
 
 clean:
 	rm -rf $(BUILDDIR)
-	$(call undo_modularize)
