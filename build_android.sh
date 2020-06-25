@@ -28,6 +28,8 @@ make clean && make $TARGET 2>&1 | tee $LOG_FILE
 readonly GO_WORK_DIR=$(cat $LOG_FILE | grep "WORK=" | cut -f2 -d=)
 if [ ! -z $GO_WORK_DIR ]; then
   echo "Copying JNI binaries from: $GO_WORK_DIR"
+  # Make the Go working directory writable (it's read-only) so we can remove it when we're done.
+  chmod -R +w $GO_WORK_DIR
   readonly JNI_DIR=$BUILD_DIR/jni
   mkdir -p $JNI_DIR && cp -R $GO_WORK_DIR/android/src/main/jniLibs/ $JNI_DIR/
   rm -rf $GO_WORK_DIR
