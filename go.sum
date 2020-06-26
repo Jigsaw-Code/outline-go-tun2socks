@@ -1,8 +1,8 @@
 cloud.google.com/go v0.26.0/go.mod h1:aQUYkXzVsufM+DwF1aE+0xfcU+56JwCaLick0ClmMTw=
 github.com/BurntSushi/toml v0.3.1/go.mod h1:xHWCNGjB5oqiDr8zfno3MHue2Ht5sIBksp03qcyfWMU=
 github.com/BurntSushi/xgb v0.0.0-20160522181843-27f122750802/go.mod h1:IVnqGOEym/WlBOVXweHU+Q+/VP0lqqI8lqeDx9IjBqo=
-github.com/Jigsaw-Code/choir v0.0.0-20200325191946-e987d93727aa h1:A/Yx8Ze68uiTjPt3TeD8uZ1W502GW15VhwOtqb0XHyg=
-github.com/Jigsaw-Code/choir v0.0.0-20200325191946-e987d93727aa/go.mod h1:c4Wd1y1PeCajZbKZV+ZmcFGMDoduyqMCEMHW5iqzWXI=
+github.com/Jigsaw-Code/choir v1.0.1 h1:WeRt6aTn5L+MtRNqRJ+J1RKgoO8CyXXt1dtZghy2KjE=
+github.com/Jigsaw-Code/choir v1.0.1/go.mod h1:c4Wd1y1PeCajZbKZV+ZmcFGMDoduyqMCEMHW5iqzWXI=
 github.com/Jigsaw-Code/getsni v0.0.0-20190807203514-efe2dbf35d1f h1:PT61aMvdZPh/8L5FjmKu8DS4/VnmwSJICVZ/THpmLF0=
 github.com/Jigsaw-Code/getsni v0.0.0-20190807203514-efe2dbf35d1f/go.mod h1:C68VBkZJR/wcvgo6pmdlm6snMHWiLE844lXJ028Qh8Y=
 github.com/Jigsaw-Code/outline-ss-server v1.1.5 h1:SKCTbTNPHmYGHAjK+RZOxQeNhdOtOgRCNTB5rXOZV+s=

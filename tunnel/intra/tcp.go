@@ -99,6 +99,9 @@ func (h *tcpHandler) forward(local net.Conn, remote split.DuplexConn, summary *T
 	summary.UploadBytes = <-upload
 	summary.Duration = int32(time.Since(start).Seconds())
 	h.listener.OnTCPSocketClosed(summary)
+	if summary.Retry != nil {
+		h.sniReporter.Report(*summary)
+	}
 }
 
 func filteredPort(addr net.Addr) int16 {
@@ -138,9 +141,6 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 		} else {
 			summary.Retry = &split.RetryStats{}
 			c, err = split.DialWithSplitRetry(h.dialer, target, summary.Retry)
-			if summary.Retry.Split != 0 {
-				h.sniReporter.Report(summary)
-			}
 		}
 	} else {
 		var generic net.Conn
