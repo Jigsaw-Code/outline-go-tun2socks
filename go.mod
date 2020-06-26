@@ -3,7 +3,7 @@ module github.com/Jigsaw-Code/outline-go-tun2socks
 go 1.14
 
 require (
-	github.com/Jigsaw-Code/choir v0.0.0-20200325191946-e987d93727aa
+	github.com/Jigsaw-Code/choir v1.0.1
 	github.com/Jigsaw-Code/getsni v0.0.0-20190807203514-efe2dbf35d1f
 	github.com/Jigsaw-Code/outline-ss-server v1.1.5
 	github.com/eycorsican/go-tun2socks v1.16.7
