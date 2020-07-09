@@ -6,7 +6,7 @@ IMPORT_PATH=github.com/Jigsaw-Code/outline-go-tun2socks
 ELECTRON_PATH=$(IMPORT_PATH)/outline/electron
 LDFLAGS='-s -w'
 ANDROID_LDFLAGS='-w' # Don't strip Android debug symbols so we can upload them to crash reporting tools.
-TUN2SOCKS_VERSION=v1.16.7
+TUN2SOCKS_VERSION=v1.16.9
 XGO_LDFLAGS='-s -w -X main.version=$(TUN2SOCKS_VERSION)'
 
 ANDROID_BUILDDIR=$(BUILDDIR)/android
