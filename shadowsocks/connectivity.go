@@ -68,8 +68,15 @@ func CheckTCPConnectivityWithHTTP(client shadowsocks.Client, targetURL string) e
 	if !hasPort(targetAddr) {
 		targetAddr = net.JoinHostPort(targetAddr, "80")
 	}
-	conn, err := client.DialTCP(nil, targetAddr)
+	proxyConn, err := client.DialProxyTCP(nil)
 	if err != nil {
+		return &ReachabilityError{err}
+	}
+	defer proxyConn.Close()
+	conn, err := client.DialDestinationTCP(proxyConn, targetAddr, nil)
+	if err != nil {
+		// Unexpected error.  This could occur if the connection failed immediately
+		// after being established.
 		return &ReachabilityError{err}
 	}
 	defer conn.Close()

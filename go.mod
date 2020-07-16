@@ -2,10 +2,12 @@ module github.com/Jigsaw-Code/outline-go-tun2socks
 
 go 1.14
 
+replace github.com/eycorsican/go-tun2socks => github.com/bemasc/go-tun2socks v1.15.1-0.20200716212529-923443ba18d9
+
 require (
 	github.com/Jigsaw-Code/choir v1.0.1
 	github.com/Jigsaw-Code/getsni v0.0.0-20190807203514-efe2dbf35d1f
-	github.com/Jigsaw-Code/outline-ss-server v1.1.7
+	github.com/Jigsaw-Code/outline-ss-server v1.1.8-0.20200716004234-958f464c27d9
 	github.com/eycorsican/go-tun2socks v1.16.9
 	github.com/oschwald/maxminddb-golang v1.7.0 // indirect
 	github.com/prometheus/client_golang v1.7.1 // indirect

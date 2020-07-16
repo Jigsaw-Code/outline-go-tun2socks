@@ -26,7 +26,7 @@ import (
 func init() {
 	// Conserve memory by increasing garbage collection frequency.
 	debug.SetGCPercent(10)
-	log.SetLevel(log.WARN)
+	log.SetLevel(log.DEBUG)
 }
 
 // OutlineTunnel embeds the tun2socks.OutlineTunnel interface so it gets exported by gobind.

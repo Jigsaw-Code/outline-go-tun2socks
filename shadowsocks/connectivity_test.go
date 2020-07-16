@@ -64,12 +64,20 @@ type fakeSSClient struct {
 	failUDP            bool
 }
 
-func (c *fakeSSClient) DialTCP(laddr *net.TCPAddr, raddr string) (onet.DuplexConn, error) {
+func (c *fakeSSClient) DialProxyTCP(laddr *net.TCPAddr) (onet.DuplexConn, error) {
 	if c.failReachability {
 		return nil, &net.OpError{}
 	}
 	return &fakeDuplexConn{failRead: c.failAuthentication}, nil
 }
+
+func (c *fakeSSClient) DialDestinationTCP(proxyConn onet.DuplexConn, raddr string, hello []byte) (onet.DuplexConn, error) {
+	if c.failReachability {
+		return nil, &net.OpError{}
+	}
+	return proxyConn, nil
+}
+
 func (c *fakeSSClient) ListenUDP(laddr *net.UDPAddr) (net.PacketConn, error) {
 	conn, err := net.ListenPacket("udp", "")
 	if err != nil {
