@@ -18,6 +18,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"sync/atomic"
 	"testing"
 )
 
@@ -153,11 +154,11 @@ func TestDisconfirmMismatch(t *testing.T) {
 }
 
 func TestResolver(t *testing.T) {
-	flag := false
+	var dialCount int32
 	resolver := &net.Resolver{
 		PreferGo: true,
 		Dial: func(context context.Context, network, address string) (net.Conn, error) {
-			flag = true
+			atomic.AddInt32(&dialCount, 1)
 			return nil, errors.New("Fake dialer")
 		},
 	}
@@ -166,7 +167,7 @@ func TestResolver(t *testing.T) {
 	if !s.Empty() {
 		t.Error("Google lookup should have failed due to fake dialer")
 	}
-	if !flag {
+	if atomic.LoadInt32(&dialCount) == 0 {
 		t.Error("Fake dialer didn't run")
 	}
 }

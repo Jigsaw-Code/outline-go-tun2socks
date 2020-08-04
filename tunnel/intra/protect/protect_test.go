@@ -3,18 +3,21 @@ package protect
 import (
 	"context"
 	"net"
+	"sync"
 	"syscall"
 	"testing"
 )
 
 // The fake protector just records the file descriptors it was given.
 type fakeProtector struct {
-	Protector
+	mu  sync.Mutex
 	fds []int32
 }
 
 func (p *fakeProtector) Protect(fd int32) bool {
+	p.mu.Lock()
 	p.fds = append(p.fds, fd)
+	p.mu.Unlock()
 	return true
 }
 
