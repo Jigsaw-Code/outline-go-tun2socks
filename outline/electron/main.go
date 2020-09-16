@@ -22,20 +22,15 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
-	"time"
 
 	oss "github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/shadowsocks"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 	"github.com/eycorsican/go-tun2socks/common/log"
 	_ "github.com/eycorsican/go-tun2socks/common/log/simple" // Register a simple logger.
-	"github.com/eycorsican/go-tun2socks/core"
-	"github.com/eycorsican/go-tun2socks/proxy/dnsfallback"
 	"github.com/eycorsican/go-tun2socks/tun"
 )
 
 const (
-	mtu        = 1500
-	udpTimeout = 30 * time.Second
 	persistTun = true // Linux: persist the TUN interface after the last open file descriptor is closed.
 )
 
@@ -112,37 +107,25 @@ func main() {
 		log.Errorf("Failed to open TUN device: %v", err)
 		os.Exit(oss.SystemMisconfigured)
 	}
-	// Output packets to TUN device
-	core.RegisterOutputFn(tunDevice.Write)
 
-	// Register TCP and UDP connection handlers
-	core.RegisterTCPConnHandler(
-		shadowsocks.NewTCPHandler(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher))
-	if *args.dnsFallback {
-		// UDP connectivity not supported, fall back to DNS over TCP.
-		log.Debugf("Registering DNS fallback UDP handler")
-		core.RegisterUDPConnHandler(dnsfallback.NewUDPHandler())
-	} else {
-		core.RegisterUDPConnHandler(
-			shadowsocks.NewUDPHandler(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher, udpTimeout))
+	t, err := tunnel.NewOutlineTunnel(*args.proxyHost, *args.proxyPort,
+		*args.proxyPassword, *args.proxyCipher, !*args.dnsFallback, tunDevice)
+	if err != nil {
+		log.Errorf("Failed to start tunnel")
+		os.Exit(oss.ShadowsocksStartFailure)
 	}
 
-	// Configure LWIP stack to receive input data from the TUN device
-	lwipWriter := core.NewLWIPStack()
-	go func() {
-		_, err := io.CopyBuffer(lwipWriter, tunDevice, make([]byte, mtu))
-		if err != nil {
-			log.Errorf("Failed to write data to network stack: %v", err)
-			os.Exit(oss.Unexpected)
-		}
-	}()
-
+	go tunnel.ProcessInputPackets(t, tunDevice, func(err error) {
+		log.Errorf("Error while processing input: %v", err)
+		os.Exit(oss.Unexpected)
+	})
 	log.Infof("tun2socks running...")
 
 	osSignals := make(chan os.Signal, 1)
 	signal.Notify(osSignals, os.Interrupt, os.Kill, syscall.SIGTERM, syscall.SIGHUP)
 	sig := <-osSignals
 	log.Debugf("Received signal: %v", sig)
+	t.Disconnect()
 }
 
 func setLogLevel(level string) {

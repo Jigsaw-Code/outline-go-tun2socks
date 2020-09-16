@@ -45,17 +45,14 @@ func init() {
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
 func ConnectIntraTunnel(fd int, fakedns string, dohdns doh.Transport, protector protect.Protector, listener tunnel.IntraListener) (tunnel.IntraTunnel, error) {
-	tun, err := tunnel.MakeTunFile(fd)
-	if err != nil {
-		return nil, err
-	}
+	tun := tunnel.TUNFile(fd)
 	dialer := protect.MakeDialer(protector)
 	config := protect.MakeListenConfig(protector)
 	t, err := tunnel.NewIntraTunnel(fakedns, dohdns, tun, dialer, config, listener)
 	if err != nil {
 		return nil, err
 	}
-	go tunnel.ProcessInputPackets(t, tun)
+	go tunnel.ProcessInputPackets(t, tun, nil)
 	return t, nil
 }
 

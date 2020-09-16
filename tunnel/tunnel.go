@@ -16,7 +16,6 @@ package tunnel
 
 import (
 	"errors"
-	"io"
 
 	"github.com/eycorsican/go-tun2socks/core"
 )
@@ -32,7 +31,6 @@ type Tunnel interface {
 }
 
 type tunnel struct {
-	tunWriter   io.WriteCloser
 	lwipStack   core.LWIPStack
 	isConnected bool
 }

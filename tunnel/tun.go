@@ -1,40 +1,46 @@
 package tunnel
 
 import (
-	"errors"
-	"os"
+	"io"
 
 	"github.com/eycorsican/go-tun2socks/common/log"
 	_ "github.com/eycorsican/go-tun2socks/common/log/simple" // Import simple log for the side effect of making logs printable.
+	"golang.org/x/sys/unix"
 )
 
 const vpnMtu = 1500
 
-// MakeTunFile returns an os.File object from a TUN file descriptor `fd`.
-func MakeTunFile(fd int) (*os.File, error) {
-	if fd < 0 {
-		return nil, errors.New("Must provide a valid TUN file descriptor")
-	}
-	file := os.NewFile(uintptr(fd), "")
-	if file == nil {
-		return nil, errors.New("Failed to open TUN file descriptor")
-	}
-	return file, nil
+// TUNFile is an io.ReadWriter wrapping a TUN file descriptor (UNIX platforms only).
+// This is a substitute for os.NewFile that avoids taking ownership of the file.
+type TUNFile int
+
+func (f TUNFile) Read(buf []byte) (int, error) {
+	return unix.Read(int(f), buf)
+}
+
+func (f TUNFile) Write(buf []byte) (int, error) {
+	return unix.Write(int(f), buf)
 }
 
 // ProcessInputPackets reads packets from a TUN device `tun` and writes them to `tunnel`.
-func ProcessInputPackets(tunnel Tunnel, tun *os.File) {
+func ProcessInputPackets(tunnel Tunnel, tun io.Reader, onError func(error)) {
 	buffer := make([]byte, vpnMtu)
 	for tunnel.IsConnected() {
 		len, err := tun.Read(buffer)
 		if err != nil {
 			log.Warnf("Failed to read packet from TUN: %v", err)
+			if onError != nil {
+				onError(err)
+			}
 			continue
 		}
 		if len == 0 {
 			log.Infof("Read EOF from TUN")
 			continue
 		}
-		tunnel.Write(buffer)
+		_, err = tunnel.Write(buffer)
+		if err != nil && onError != nil {
+			onError(err)
+		}
 	}
 }
