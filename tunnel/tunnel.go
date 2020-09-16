@@ -47,6 +47,7 @@ func (t *tunnel) Disconnect() {
 	}
 	t.isConnected = false
 	t.lwipStack.Close()
+	t.tunWriter.Close()
 }
 
 func (t *tunnel) Write(data []byte) (int, error) {
