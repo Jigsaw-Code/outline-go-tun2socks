@@ -34,6 +34,7 @@ func init() {
 // rules.  Currently, this only consists of redirecting DNS packets to a specified
 // server; all other data flows directly to its destination.
 //
+// The caller retains ownership of `fd`.
 // `fakedns` is the DNS server that the system believes it is using, in "host:port" style.
 //   The port is normally 53.
 // `udpdns` and `tcpdns` are the location of the actual DNS server being used.  For DNS
@@ -45,7 +46,10 @@ func init() {
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
 func ConnectIntraTunnel(fd int, fakedns string, dohdns doh.Transport, protector protect.Protector, listener tunnel.IntraListener) (tunnel.IntraTunnel, error) {
-	tun := tunnel.TUNFile(fd)
+	tun, err := tunnel.MakeTunFile(fd)
+	if err != nil {
+		return nil, err
+	}
 	dialer := protect.MakeDialer(protector)
 	config := protect.MakeListenConfig(protector)
 	t, err := tunnel.NewIntraTunnel(fakedns, dohdns, tun, dialer, config, listener)

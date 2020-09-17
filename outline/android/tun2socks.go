@@ -51,7 +51,10 @@ func ConnectShadowsocksTunnel(fd int, host string, port int, password, cipher st
 	if port <= 0 || port > math.MaxUint16 {
 		return nil, fmt.Errorf("Invalid port number: %v", port)
 	}
-	tun := tunnel.TUNFile(fd)
+	tun, err := tunnel.MakeTunFile(fd)
+	if err != nil {
+		return nil, err
+	}
 	t, err := tunnel.NewOutlineTunnel(host, port, password, cipher, isUDPEnabled, tun)
 	if err != nil {
 		return nil, err
