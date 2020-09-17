@@ -72,12 +72,12 @@ type intratunnel struct {
 // `tunWriter` is the downstream VPN tunnel
 // `dialer` and `config` will be used for all network activity.
 // `listener` will be notified at the completion of every tunneled socket.
-func NewIntraTunnel(fakedns string, dohdns doh.Transport, tunWriter io.Writer, dialer *net.Dialer, config *net.ListenConfig, listener IntraListener) (IntraTunnel, error) {
+func NewIntraTunnel(fakedns string, dohdns doh.Transport, tunWriter io.WriteCloser, dialer *net.Dialer, config *net.ListenConfig, listener IntraListener) (IntraTunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("Must provide a valid TUN writer")
 	}
 	core.RegisterOutputFn(tunWriter.Write)
-	base := &tunnel{core.NewLWIPStack(), true}
+	base := &tunnel{tunWriter, core.NewLWIPStack(), true}
 	t := &intratunnel{
 		tunnel: base,
 	}

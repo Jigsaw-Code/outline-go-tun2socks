@@ -2,7 +2,6 @@ package tunnel
 
 import (
 	"errors"
-	"io"
 	"os"
 
 	"github.com/eycorsican/go-tun2socks/common/log"
@@ -13,7 +12,7 @@ import (
 const vpnMtu = 1500
 
 // MakeTunFile returns an os.File object from a TUN file descriptor `fd`
-// without taking ownership of the file descriptor.
+// without taking ownership of the file descriptor.  (UNIX only.)
 func MakeTunFile(fd int) (*os.File, error) {
 	if fd < 0 {
 		return nil, errors.New("Must provide a valid TUN file descriptor")
@@ -31,24 +30,18 @@ func MakeTunFile(fd int) (*os.File, error) {
 }
 
 // ProcessInputPackets reads packets from a TUN device `tun` and writes them to `tunnel`.
-func ProcessInputPackets(tunnel Tunnel, tun io.Reader, onError func(error)) {
+func ProcessInputPackets(tunnel Tunnel, tun *os.File) {
 	buffer := make([]byte, vpnMtu)
 	for tunnel.IsConnected() {
 		len, err := tun.Read(buffer)
 		if err != nil {
 			log.Warnf("Failed to read packet from TUN: %v", err)
-			if onError != nil {
-				onError(err)
-			}
 			continue
 		}
 		if len == 0 {
 			log.Infof("Read EOF from TUN")
 			continue
 		}
-		_, err = tunnel.Write(buffer)
-		if err != nil && onError != nil {
-			onError(err)
-		}
+		tunnel.Write(buffer)
 	}
 }

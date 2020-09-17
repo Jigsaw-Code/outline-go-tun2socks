@@ -56,7 +56,7 @@ func ConnectIntraTunnel(fd int, fakedns string, dohdns doh.Transport, protector 
 	if err != nil {
 		return nil, err
 	}
-	go tunnel.ProcessInputPackets(t, tun, nil)
+	go tunnel.ProcessInputPackets(t, tun)
 	return t, nil
 }
 
