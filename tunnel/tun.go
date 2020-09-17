@@ -11,8 +11,10 @@ import (
 
 const vpnMtu = 1500
 
-// MakeTunFile returns an os.File object from a TUN file descriptor `fd`
-// without taking ownership of the file descriptor.  (UNIX only.)
+// MakeTunFile returns an os.File object from a TUN file descriptor `fd`.
+// The returned os.File holds a separate reference to the underlying file,
+// so the file will not be closed until both `fd` and the os.File are
+// separately closed.  (UNIX only.)
 func MakeTunFile(fd int) (*os.File, error) {
 	if fd < 0 {
 		return nil, errors.New("Must provide a valid TUN file descriptor")
