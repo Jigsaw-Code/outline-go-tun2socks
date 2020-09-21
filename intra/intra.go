@@ -34,6 +34,9 @@ func init() {
 // rules.  Currently, this only consists of redirecting DNS packets to a specified
 // server; all other data flows directly to its destination.
 //
+// `fd` is the TUN device.  The IntraTunnel acquires an additional reference to it, which
+//     is released by IntraTunnel.Disconnect(), so the caller must close `fd` _and_ call
+//     Disconnect() in order to close the TUN device.
 // `fakedns` is the DNS server that the system believes it is using, in "host:port" style.
 //   The port is normally 53.
 // `udpdns` and `tcpdns` are the location of the actual DNS server being used.  For DNS

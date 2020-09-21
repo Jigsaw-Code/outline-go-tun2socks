@@ -38,7 +38,9 @@ type OutlineTunnel interface {
 // Returns an OutlineTunnel instance and does *not* take ownership of the TUN file descriptor; the
 // caller is responsible for closing after OutlineTunnel disconnects.
 //
-// `fd` is the file descriptor to the VPN TUN device. Must be set to blocking mode.
+// `fd` is the TUN device.  The OutlineTunnel acquires an additional reference to it, which
+//     is released by OutlineTunnel.Disconnect(), so the caller must close `fd` _and_ call
+//     Disconnect() in order to close the TUN device.
 // `host` is  IP address of the Shadowsocks proxy server.
 // `port` is the port of the Shadowsocks proxy server.
 // `password` is the password of the Shadowsocks proxy.
