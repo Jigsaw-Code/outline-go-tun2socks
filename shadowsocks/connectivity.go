@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/Jigsaw-Code/outline-ss-server/shadowsocks"
+	shadowsocks "github.com/Jigsaw-Code/outline-ss-server/client"
 )
 
 // TODO: make these values configurable by exposing a struct with the connectivity methods.

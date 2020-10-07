@@ -6,7 +6,7 @@ import (
 	"time"
 
 	oss "github.com/Jigsaw-Code/outline-go-tun2socks/shadowsocks"
-	"github.com/Jigsaw-Code/outline-ss-server/shadowsocks"
+	shadowsocks "github.com/Jigsaw-Code/outline-ss-server/client"
 )
 
 // Outline error codes. Must be kept in sync with definitions in outline-client/cordova-plugin-outline/outlinePlugin.js

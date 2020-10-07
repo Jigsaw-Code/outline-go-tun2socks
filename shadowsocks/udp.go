@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Jigsaw-Code/outline-ss-server/shadowsocks"
+	shadowsocks "github.com/Jigsaw-Code/outline-ss-server/client"
 	"github.com/eycorsican/go-tun2socks/core"
 )
 
