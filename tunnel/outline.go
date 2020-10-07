@@ -24,7 +24,7 @@ import (
 	"github.com/eycorsican/go-tun2socks/proxy/dnsfallback"
 
 	oss "github.com/Jigsaw-Code/outline-go-tun2socks/shadowsocks"
-	"github.com/Jigsaw-Code/outline-ss-server/shadowsocks"
+	shadowsocks "github.com/Jigsaw-Code/outline-ss-server/client"
 )
 
 // OutlineTunnel represents a tunnel from a TUN device to a server.
