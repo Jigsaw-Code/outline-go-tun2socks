@@ -128,7 +128,7 @@ func init() {
 
 // Check that the constructor works.
 func TestNewTransport(t *testing.T) {
-	_, err := NewTransport(testURL, ips, nil, nil)
+	_, err := NewTransport(testURL, ips, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,11 +136,11 @@ func TestNewTransport(t *testing.T) {
 
 // Check that the constructor rejects unsupported URLs.
 func TestBadUrl(t *testing.T) {
-	_, err := NewTransport("ftp://www.example.com", nil, nil, nil)
+	_, err := NewTransport("ftp://www.example.com", nil, nil, nil, nil)
 	if err == nil {
 		t.Error("Expected error")
 	}
-	_, err = NewTransport("https://www.example", nil, nil, nil)
+	_, err = NewTransport("https://www.example", nil, nil, nil, nil)
 	if err == nil {
 		t.Error("Expected error")
 	}
@@ -149,7 +149,7 @@ func TestBadUrl(t *testing.T) {
 // Check for failure when the query is too short to be valid.
 func TestShortQuery(t *testing.T) {
 	var qerr *queryError
-	doh, _ := NewTransport(testURL, ips, nil, nil)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil)
 	_, err := doh.Query([]byte{})
 	if err == nil {
 		t.Error("Empty query should fail")
@@ -188,7 +188,7 @@ func TestQueryIntegration(t *testing.T) {
 
 	testQuery := func(queryData []byte) {
 
-		doh, err := NewTransport(testURL, ips, nil, nil)
+		doh, err := NewTransport(testURL, ips, nil, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -238,7 +238,7 @@ func (r *testRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 
 // Check that a DNS query is converted correctly into an HTTP query.
 func TestRequest(t *testing.T) {
-	doh, _ := NewTransport(testURL, ips, nil, nil)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -287,7 +287,7 @@ func queriesMostlyEqual(m1 dnsmessage.Message, m2 dnsmessage.Message) bool {
 
 // Check that a DOH response is returned correctly.
 func TestResponse(t *testing.T) {
-	doh, _ := NewTransport(testURL, ips, nil, nil)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -326,7 +326,7 @@ func TestResponse(t *testing.T) {
 // Simulate an empty response.  (This is not a compliant server
 // behavior.)
 func TestEmptyResponse(t *testing.T) {
-	doh, _ := NewTransport(testURL, ips, nil, nil)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -357,7 +357,7 @@ func TestEmptyResponse(t *testing.T) {
 
 // Simulate a non-200 HTTP response code.
 func TestHTTPError(t *testing.T) {
-	doh, _ := NewTransport(testURL, ips, nil, nil)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -387,7 +387,7 @@ func TestHTTPError(t *testing.T) {
 
 // Simulate an HTTP query error.
 func TestSendFailed(t *testing.T) {
-	doh, _ := NewTransport(testURL, ips, nil, nil)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -431,7 +431,7 @@ func (c *fakeConn) RemoteAddr() net.Addr {
 // Check that the DNSListener is called with a correct summary.
 func TestListener(t *testing.T) {
 	listener := &fakeListener{}
-	doh, _ := NewTransport(testURL, ips, nil, listener)
+	doh, _ := NewTransport(testURL, ips, nil, nil, listener)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
