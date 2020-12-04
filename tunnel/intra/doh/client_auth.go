@@ -22,6 +22,8 @@ import (
 	"errors"
 	"io"
 	"sync"
+
+	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
 // CertificateLoader interface for requesting ClientAuth instances.
@@ -51,54 +53,32 @@ type clientAuthWrapper struct {
 	sync.Mutex
 	loadCertificateOnce sync.Once
 	loader              CertificateLoader
-
-	certificate tls.Certificate
-	signer      ClientAuth
+	signer              ClientAuth
 }
 
 func (ca *clientAuthWrapper) loadClientCertificate() {
-	// Ensure that any previous certificate is cleared regardless of success.
-	ca.certificate = tls.Certificate{}
 	// If no loader was provided then we can't load a certificate.
 	if ca.loader == nil {
+		log.Warnf("Client certificates are not supported")
 		return
 	}
 	signer := ca.loader.LoadClientCertificate()
 	if signer == nil {
+		log.Warnf("No client certificate selected")
 		return
 	}
 	cert := signer.GetClientCertificate()
 	if cert == nil {
+		log.Warnf("Unable to fetch client certificate")
 		return
-	}
-	intermediate := signer.GetIntermediateCertificate()
-	chain := make([][]byte, 0, 2)
-	chain = append(chain, cert)
-	if intermediate != nil {
-		chain = append(chain, intermediate)
-	}
-	leaf, err := x509.ParseCertificate(cert)
-	if err != nil {
-		return
-	}
-	_, isECDSA := leaf.PublicKey.(*ecdsa.PublicKey)
-	if !isECDSA {
-		// RSA-PSS and RSA-SSA both need explicit signature generation support.
-		// Fail here rather than during signing.
-		return
-	}
-	ca.certificate = tls.Certificate{
-		Certificate: chain,
-		PrivateKey:  ca,
-		Leaf:        leaf,
 	}
 	ca.signer = signer
+
 }
 
-func (ca *clientAuthWrapper) finalizeClientAuth() {
+func (ca *clientAuthWrapper) init() {
 	// Attempt to set signer on the first call.
-	// Subsequent callers will block until this completes,
-	// ensuring ca.signer and ca.certificate are both safe to access.
+	// Subsequent callers (TLS connections) will block until this completes.
 	ca.Lock()
 	defer ca.Unlock()
 	ca.loadCertificateOnce.Do(ca.loadClientCertificate)
@@ -108,23 +88,54 @@ func (ca *clientAuthWrapper) finalizeClientAuth() {
 // Implements tls.Config GetClientCertificate().
 func (ca *clientAuthWrapper) GetClientCertificate(
 	info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-	ca.finalizeClientAuth()
-	return &ca.certificate, nil
+	ca.init()
+	if ca.signer == nil {
+		return &tls.Certificate{}, nil
+	}
+	cert := ca.signer.GetClientCertificate()
+	if cert == nil {
+		log.Warnf("Unable to fetch client certificate")
+		return &tls.Certificate{}, nil
+	}
+	chain := [][]byte{cert}
+	intermediate := ca.signer.GetIntermediateCertificate()
+	if intermediate != nil {
+		chain = append(chain, intermediate)
+	}
+	leaf, err := x509.ParseCertificate(cert)
+	if err != nil {
+		log.Warnf("Unable to parse client certificate: %v", err)
+		return &tls.Certificate{}, nil
+	}
+	_, isECDSA := leaf.PublicKey.(*ecdsa.PublicKey)
+	if !isECDSA {
+		// RSA-PSS and RSA-SSA both need explicit signature generation support.
+		log.Warnf("Only ECDSA client certificates are supported")
+		return &tls.Certificate{}, nil
+	}
+	return &tls.Certificate{
+		Certificate: chain,
+		PrivateKey:  ca,
+		Leaf:        leaf,
+	}, nil
 }
 
 // Public returns the public key for the client certificate.
 func (ca *clientAuthWrapper) Public() crypto.PublicKey {
-	ca.finalizeClientAuth()
-	cert := ca.certificate
-	if cert.Leaf == nil {
+	if ca.signer == nil {
 		return nil
 	}
-	return cert.Leaf.PublicKey
+	cert := ca.signer.GetClientCertificate()
+	leaf, err := x509.ParseCertificate(cert)
+	if err != nil {
+		log.Warnf("Unable to parse client certificate: %v", err)
+		return nil
+	}
+	return leaf.PublicKey
 }
 
 // Sign a digest.
 func (ca *clientAuthWrapper) Sign(rand io.Reader, digest []byte, opts crypto.SignerOpts) ([]byte, error) {
-	ca.finalizeClientAuth()
 	if ca.signer == nil {
 		return nil, errors.New("no client certificate")
 	}

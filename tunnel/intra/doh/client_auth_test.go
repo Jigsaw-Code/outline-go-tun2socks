@@ -327,6 +327,10 @@ func TestNoAuth(t *testing.T) {
 	}
 	// TLS stack requests a signature. This should not happen in real life
 	// because cert.Certificate is empty.
+	public := wrapper.Public()
+	if public != nil {
+		t.Error("Expected public to be nil")
+	}
 	digest, opts := newToBeSigned([]byte("hello world"))
 	_, err = wrapper.Sign(rand.Reader, digest, opts)
 	if err == nil {
