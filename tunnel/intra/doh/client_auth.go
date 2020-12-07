@@ -50,7 +50,6 @@ type ClientAuth interface {
 // clientAuthWrapper manages certificate loading and usage during TLS handshakes.
 // Implements crypto.Signer.
 type clientAuthWrapper struct {
-	sync.Mutex
 	loadCertificateOnce sync.Once
 	loader              CertificateLoader
 	signer              ClientAuth
@@ -73,22 +72,17 @@ func (ca *clientAuthWrapper) loadClientCertificate() {
 		return
 	}
 	ca.signer = signer
-
-}
-
-func (ca *clientAuthWrapper) init() {
-	// Attempt to set signer on the first call.
-	// Subsequent callers (TLS connections) will block until this completes.
-	ca.Lock()
-	defer ca.Unlock()
-	ca.loadCertificateOnce.Do(ca.loadClientCertificate)
 }
 
 // Fetch the client certificate from the ClientAuth provider.
 // Implements tls.Config GetClientCertificate().
 func (ca *clientAuthWrapper) GetClientCertificate(
 	info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-	ca.init()
+
+	// Attempt to set signer on the first call.
+	// Subsequent callers (TLS connections) will block until this completes.
+	ca.loadCertificateOnce.Do(ca.loadClientCertificate)
+
 	if ca.signer == nil {
 		return &tls.Certificate{}, nil
 	}
