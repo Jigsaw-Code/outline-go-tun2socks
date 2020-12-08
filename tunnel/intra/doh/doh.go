@@ -90,7 +90,6 @@ type transport struct {
 	client   http.Client
 	dialer   *net.Dialer
 	listener Listener
-	auth     clientAuthWrapper
 }
 
 // Wait up to three seconds for the TCP handshake to complete.
@@ -146,9 +145,9 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 //   lookup fails or returns non-working addresses.
 // `dialer` is the dialer that the transport will use.  The transport will modify the dialer's
 //   timeout but will not mutate it otherwise.
-// `loader` will provide a client certificate if required by the TLS server.
+// `auth` will provide a client certificate if required by the TLS server.
 // `listener` will receive the status of each DNS query when it is complete.
-func NewTransport(rawurl string, addrs []string, dialer *net.Dialer, loader CertificateLoader, listener Listener) (Transport, error) {
+func NewTransport(rawurl string, addrs []string, dialer *net.Dialer, auth ClientAuth, listener Listener) (Transport, error) {
 	if dialer == nil {
 		dialer = &net.Dialer{}
 	}
@@ -178,7 +177,6 @@ func NewTransport(rawurl string, addrs []string, dialer *net.Dialer, loader Cert
 		listener: listener,
 		dialer:   dialer,
 		ips:      ipmap.NewIPMap(dialer.Resolver),
-		auth:     newClientAuthWrapper(loader),
 	}
 	ips := t.ips.Get(t.hostname)
 	for _, addr := range addrs {
@@ -188,15 +186,22 @@ func NewTransport(rawurl string, addrs []string, dialer *net.Dialer, loader Cert
 		return nil, fmt.Errorf("No IP addresses for %s", t.hostname)
 	}
 
+	// Supply a client certificate during TLS handshakes.
+	var tlsconfig *tls.Config = nil
+	if auth != nil {
+		signer := newClientAuthWrapper(auth)
+		tlsconfig = &tls.Config{
+			GetClientCertificate: signer.GetClientCertificate,
+		}
+	}
+
 	// Override the dial function.
 	t.client.Transport = &http.Transport{
 		Dial:                  t.dial,
 		ForceAttemptHTTP2:     true,
 		TLSHandshakeTimeout:   10 * time.Second,
 		ResponseHeaderTimeout: 20 * time.Second, // Same value as Android DNS-over-TLS
-		TLSClientConfig: &tls.Config{
-			GetClientCertificate: t.auth.GetClientCertificate,
-		},
+		TLSClientConfig:       tlsconfig,
 	}
 	return t, nil
 }

@@ -165,20 +165,6 @@ func newFakeClientAuth(certificate, intermediate, key []byte) (*fakeClientAuth, 
 	return ca, nil
 }
 
-// fakeLoader implements the CertificateLoader interface for testing.
-type fakeLoader struct {
-	CertificateLoader
-	ca ClientAuth
-}
-
-func (l *fakeLoader) LoadClientCertificate() ClientAuth {
-	return l.ca
-}
-
-func newFakeLoader(ca *fakeClientAuth) *fakeLoader {
-	return &fakeLoader{ca: ca}
-}
-
 func newCertificateRequestInfo() *tls.CertificateRequestInfo {
 	return &tls.CertificateRequestInfo{
 		Version: tls.VersionTLS13,
@@ -221,9 +207,7 @@ func TestSign(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	loader := newFakeLoader(ca)
-
-	wrapper := newClientAuthWrapper(loader)
+	wrapper := newClientAuthWrapper(ca)
 	// TLS stack requests the client cert.
 	req := newCertificateRequestInfo()
 	cert, err := wrapper.GetClientCertificate(req)
@@ -270,9 +254,7 @@ func TestSignNoIntermediate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	loader := newFakeLoader(ca)
-
-	wrapper := newClientAuthWrapper(loader)
+	wrapper := newClientAuthWrapper(ca)
 	// TLS stack requests a client cert.
 	req := newCertificateRequestInfo()
 	cert, err := wrapper.GetClientCertificate(req)
@@ -310,9 +292,7 @@ func TestNoAuth(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	loader := newFakeLoader(ca)
-
-	wrapper := newClientAuthWrapper(loader)
+	wrapper := newClientAuthWrapper(ca)
 	// TLS stack requests a client cert.
 	req := newCertificateRequestInfo()
 	cert, err := wrapper.GetClientCertificate(req)
@@ -346,9 +326,7 @@ func TestRSACertificate(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	loader := newFakeLoader(ca)
-
-	wrapper := newClientAuthWrapper(loader)
+	wrapper := newClientAuthWrapper(ca)
 	// TLS stack requests a client cert.  We should not return one because
 	// we don't support RSA.
 	req := newCertificateRequestInfo()
