@@ -21,22 +21,14 @@ import (
 	"crypto/x509"
 	"errors"
 	"io"
-	"sync"
 
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
-// CertificateLoader interface for requesting ClientAuth instances.
-type CertificateLoader interface {
-	// Request a ClientAuth instance (blocking).
-	// returns nil (no authentication) or a ClientAuth instance.
-	LoadClientCertificate() ClientAuth
-}
-
 // ClientAuth interface for providing TLS certificates and signatures.
 type ClientAuth interface {
 	// GetClientCertificate returns the client certificate (if any).
-	// It does not block or cause certificates to load.
+	// May block as the first call may cause certificates to load.
 	// Returns a DER encoded X.509 client certificate.
 	GetClientCertificate() []byte
 	// GetIntermediateCertificate returns the chaining certificate (if any).
@@ -50,40 +42,15 @@ type ClientAuth interface {
 // clientAuthWrapper manages certificate loading and usage during TLS handshakes.
 // Implements crypto.Signer.
 type clientAuthWrapper struct {
-	loadCertificateOnce sync.Once
-	loader              CertificateLoader
 	signer              ClientAuth
-}
-
-func (ca *clientAuthWrapper) loadClientCertificate() {
-	// If no loader was provided then we can't load a certificate.
-	if ca.loader == nil {
-		log.Warnf("Client certificates are not supported")
-		return
-	}
-	signer := ca.loader.LoadClientCertificate()
-	if signer == nil {
-		log.Warnf("No client certificate selected")
-		return
-	}
-	cert := signer.GetClientCertificate()
-	if cert == nil {
-		log.Warnf("Unable to fetch client certificate")
-		return
-	}
-	ca.signer = signer
 }
 
 // Fetch the client certificate from the ClientAuth provider.
 // Implements tls.Config GetClientCertificate().
 func (ca *clientAuthWrapper) GetClientCertificate(
 	info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
-
-	// Attempt to set signer on the first call.
-	// Subsequent callers (TLS connections) will block until this completes.
-	ca.loadCertificateOnce.Do(ca.loadClientCertificate)
-
 	if ca.signer == nil {
+		log.Warnf("Client certificate requested but not supported")
 		return &tls.Certificate{}, nil
 	}
 	cert := ca.signer.GetClientCertificate()
@@ -140,8 +107,8 @@ func (ca *clientAuthWrapper) Sign(rand io.Reader, digest []byte, opts crypto.Sig
 	return signature, nil
 }
 
-func newClientAuthWrapper(loader CertificateLoader) clientAuthWrapper {
+func newClientAuthWrapper(signer ClientAuth) clientAuthWrapper {
 	return clientAuthWrapper{
-		loader: loader,
+		signer: signer,
 	}
 }
