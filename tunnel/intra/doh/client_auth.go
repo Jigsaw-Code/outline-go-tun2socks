@@ -45,7 +45,9 @@ type clientAuthWrapper struct {
 	signer              ClientAuth
 }
 
-// Fetch the client certificate from the ClientAuth provider.
+// GetClientCertificate returns the client certificate chain as a tls.Certificate.
+// Returns an empty Certificate on failure, permitting the handshake to
+// continue without authentication.
 // Implements tls.Config GetClientCertificate().
 func (ca *clientAuthWrapper) GetClientCertificate(
 	info *tls.CertificateRequestInfo) (*tls.Certificate, error) {
