@@ -187,7 +187,7 @@ func NewTransport(rawurl string, addrs []string, dialer *net.Dialer, auth Client
 	}
 
 	// Supply a client certificate during TLS handshakes.
-	var tlsconfig *tls.Config = nil
+	var tlsconfig *tls.Config
 	if auth != nil {
 		signer := newClientAuthWrapper(auth)
 		tlsconfig = &tls.Config{

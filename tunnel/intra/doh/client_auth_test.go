@@ -24,11 +24,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"math/big"
 	"testing"
-
-	"golang.org/x/crypto/cryptobyte"
-	"golang.org/x/crypto/cryptobyte/asn1"
 )
 
 // PEM encoded test leaf certificate with ECDSA public key.
@@ -116,20 +112,7 @@ func (ca *fakeClientAuth) Sign(digest []byte) []byte {
 		return nil
 	}
 	if k, isECDSA := ca.key.(*ecdsa.PrivateKey); isECDSA {
-		// We have to ASN.1 encode the signature ourselves since
-		// Go < 1.15 does not include ecdsa.SignASN1
-		// (https://github.com/golang/go/issues/20544).
-		r, s, err := ecdsa.Sign(rand.Reader, k, digest)
-		if err != nil {
-			return nil
-		}
-
-		var b cryptobyte.Builder
-		b.AddASN1(asn1.SEQUENCE, func(b *cryptobyte.Builder) {
-			b.AddASN1BigInt(r)
-			b.AddASN1BigInt(s)
-		})
-		signature, err := b.Bytes()
+		signature, err := ecdsa.SignASN1(rand.Reader, k, digest)
 		if err != nil {
 			return nil
 		}
@@ -177,27 +160,6 @@ func newToBeSigned(message []byte) ([]byte, crypto.SignerOpts) {
 	return digest[:], opts
 }
 
-// VerifyASN1 handles ECDSA ASN.1 signatures for Go < 1.15 support.
-// (https://github.com/golang/go/issues/20544).
-func VerifyASN1(pub *ecdsa.PublicKey, digest, signature []byte) bool {
-	var (
-		r, s  = &big.Int{}, &big.Int{}
-		inner cryptobyte.String
-	)
-	if pub == nil {
-		return false
-	}
-	input := cryptobyte.String(signature)
-	if !input.ReadASN1(&inner, asn1.SEQUENCE) ||
-		!input.Empty() ||
-		!inner.ReadASN1Integer(r) ||
-		!inner.ReadASN1Integer(s) ||
-		!inner.Empty() {
-		return false
-	}
-	return ecdsa.Verify(pub, digest, r, s)
-}
-
 // Simulate a TLS handshake that requires a client cert and signature.
 func TestSign(t *testing.T) {
 	certDer, _ := pem.Decode([]byte(ecCertificate))
@@ -241,7 +203,7 @@ func TestSign(t *testing.T) {
 	if !ok {
 		t.Fatal("Expected public key to be ECDSA")
 	}
-	if !VerifyASN1(pub, digest, signature) {
+	if !ecdsa.VerifyASN1(pub, digest, signature) {
 		t.Fatal("Problem verifying signature")
 	}
 }
@@ -281,7 +243,7 @@ func TestSignNoIntermediate(t *testing.T) {
 	if !ok {
 		t.Error("Expected public key to be ECDSA")
 	}
-	if !VerifyASN1(pub, digest, signature) {
+	if !ecdsa.VerifyASN1(pub, digest, signature) {
 		t.Error("Problem verifying signature")
 	}
 }
