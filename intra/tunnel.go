@@ -28,16 +28,16 @@ import (
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 )
 
-// IntraListener receives usage statistics when a UDP or TCP socket is closed,
+// Listener receives usage statistics when a UDP or TCP socket is closed,
 // or a DNS query is completed.
-type IntraListener interface {
+type Listener interface {
 	UDPListener
 	TCPListener
 	doh.Listener
 }
 
-// IntraTunnel represents an Intra session.
-type IntraTunnel interface {
+// Tunnel represents an Intra session.
+type Tunnel interface {
 	tunnel.Tunnel
 	// Get the DNSTransport (default: nil).
 	GetDNS() doh.Transport
@@ -62,7 +62,7 @@ type intratunnel struct {
 	dns doh.Transport
 }
 
-// NewIntraTunnel creates a connected Intra session.
+// NewTunnel creates a connected Intra session.
 //
 // `fakedns` is the DNS server (IP and port) that will be used by apps on the TUN device.
 //    This will normally be a reserved or remote IP address, port 53.
@@ -72,7 +72,7 @@ type intratunnel struct {
 // `tunWriter` is the downstream VPN tunnel.  IntraTunnel.Disconnect() will close `tunWriter`.
 // `dialer` and `config` will be used for all network activity.
 // `listener` will be notified at the completion of every tunneled socket.
-func NewIntraTunnel(fakedns string, dohdns doh.Transport, tunWriter io.WriteCloser, dialer *net.Dialer, config *net.ListenConfig, listener IntraListener) (IntraTunnel, error) {
+func NewTunnel(fakedns string, dohdns doh.Transport, tunWriter io.WriteCloser, dialer *net.Dialer, config *net.ListenConfig, listener Listener) (Tunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("Must provide a valid TUN writer")
 	}
@@ -88,7 +88,7 @@ func NewIntraTunnel(fakedns string, dohdns doh.Transport, tunWriter io.WriteClos
 }
 
 // Registers Intra's custom UDP and TCP connection handlers to the tun2socks core.
-func (t *intratunnel) registerConnectionHandlers(fakedns string, dialer *net.Dialer, config *net.ListenConfig, listener IntraListener) error {
+func (t *intratunnel) registerConnectionHandlers(fakedns string, dialer *net.Dialer, config *net.ListenConfig, listener Listener) error {
 	// RFC 5382 REQ-5 requires a timeout no shorter than 2 hours and 4 minutes.
 	timeout, _ := time.ParseDuration("2h4m")
 

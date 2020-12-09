@@ -32,7 +32,7 @@ func init() {
 
 // OutlineTunnel embeds the tun2socks.OutlineTunnel interface so it gets exported by gobind.
 type OutlineTunnel interface {
-	outline.OutlineTunnel
+	outline.Tunnel
 }
 
 // ConnectShadowsocksTunnel reads packets from a TUN device and routes it to a Shadowsocks proxy server.
@@ -58,7 +58,7 @@ func ConnectShadowsocksTunnel(fd int, host string, port int, password, cipher st
 	if err != nil {
 		return nil, err
 	}
-	t, err := outline.NewOutlineTunnel(host, port, password, cipher, isUDPEnabled, tun)
+	t, err := outline.NewTunnel(host, port, password, cipher, isUDPEnabled, tun)
 	if err != nil {
 		return nil, err
 	}

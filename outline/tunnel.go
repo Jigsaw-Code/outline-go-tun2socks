@@ -28,8 +28,8 @@ import (
 	shadowsocks "github.com/Jigsaw-Code/outline-ss-server/client"
 )
 
-// OutlineTunnel represents a tunnel from a TUN device to a server.
-type OutlineTunnel interface {
+// Tunnel represents a tunnel from a TUN device to a server.
+type Tunnel interface {
 	tunnel.Tunnel
 
 	// UpdateUDPSupport determines if UDP is supported following a network connectivity change.
@@ -48,7 +48,7 @@ type outlinetunnel struct {
 	isUDPEnabled bool // Whether the tunnel supports proxying UDP.
 }
 
-// NewOutlineTunnel connects a tunnel to a Shadowsocks proxy server and returns an `OutlineTunnel`.
+// NewTunnel connects a tunnel to a Shadowsocks proxy server and returns an `outline.Tunnel`.
 //
 // `host` is the IP or domain of the Shadowsocks proxy.
 // `port` is the port of the Shadowsocks proxy.
@@ -56,7 +56,7 @@ type outlinetunnel struct {
 // `cipher` is the encryption cipher used by the Shadowsocks proxy.
 // `isUDPEnabled` indicates if the Shadowsocks proxy and the network support proxying UDP traffic.
 // `tunWriter` is used to output packets back to the TUN device.  OutlineTunnel.Disconnect() will close `tunWriter`.
-func NewOutlineTunnel(host string, port int, password, cipher string, isUDPEnabled bool, tunWriter io.WriteCloser) (OutlineTunnel, error) {
+func NewTunnel(host string, port int, password, cipher string, isUDPEnabled bool, tunWriter io.WriteCloser) (Tunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("Must provide a TUN writer")
 	}

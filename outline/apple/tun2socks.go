@@ -27,7 +27,7 @@ import (
 
 // OutlineTunnel embeds the tun2socks.Tunnel interface so it gets exported by gobind.
 type OutlineTunnel interface {
-	outline.OutlineTunnel
+	outline.Tunnel
 }
 
 // TunWriter is an interface that allows for outputting packets to the TUN (VPN).
@@ -66,5 +66,5 @@ func ConnectShadowsocksTunnel(tunWriter TunWriter, host string, port int, passwo
 	} else if port <= 0 || port > math.MaxUint16 {
 		return nil, fmt.Errorf("Invalid port number: %v", port)
 	}
-	return outline.NewOutlineTunnel(host, port, password, cipher, isUDPEnabled, tunWriter)
+	return outline.NewTunnel(host, port, password, cipher, isUDPEnabled, tunWriter)
 }
