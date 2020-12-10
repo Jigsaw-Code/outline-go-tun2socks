@@ -85,8 +85,6 @@ X2Dw2zeFwTJd4iBrb28lkAxVaaXMSkgXVUuZoco8H8kDsy2hEPe1dSECQQCPw5Yg
 
 // fakeClientAuth implements the ClientAuth interface for testing.
 type fakeClientAuth struct {
-	ClientAuth
-
 	certificate  *x509.Certificate
 	intermediate *x509.Certificate
 	key          crypto.PrivateKey
