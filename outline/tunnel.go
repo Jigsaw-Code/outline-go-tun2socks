@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package tunnel
+package outline
 
 import (
 	"errors"
@@ -24,12 +24,13 @@ import (
 	"github.com/eycorsican/go-tun2socks/proxy/dnsfallback"
 
 	oss "github.com/Jigsaw-Code/outline-go-tun2socks/shadowsocks"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 	shadowsocks "github.com/Jigsaw-Code/outline-ss-server/client"
 )
 
-// OutlineTunnel represents a tunnel from a TUN device to a server.
-type OutlineTunnel interface {
-	Tunnel
+// Tunnel represents a tunnel from a TUN device to a server.
+type Tunnel interface {
+	tunnel.Tunnel
 
 	// UpdateUDPSupport determines if UDP is supported following a network connectivity change.
 	// Sets the tunnel's UDP connection handler accordingly, falling back to DNS over TCP if UDP is not supported.
@@ -38,7 +39,8 @@ type OutlineTunnel interface {
 }
 
 type outlinetunnel struct {
-	*tunnel
+	tunnel.Tunnel
+	lwipStack    core.LWIPStack
 	host         string
 	port         int
 	password     string
@@ -46,7 +48,7 @@ type outlinetunnel struct {
 	isUDPEnabled bool // Whether the tunnel supports proxying UDP.
 }
 
-// NewOutlineTunnel connects a tunnel to a Shadowsocks proxy server and returns an `OutlineTunnel`.
+// NewTunnel connects a tunnel to a Shadowsocks proxy server and returns an `outline.Tunnel`.
 //
 // `host` is the IP or domain of the Shadowsocks proxy.
 // `port` is the port of the Shadowsocks proxy.
@@ -54,7 +56,7 @@ type outlinetunnel struct {
 // `cipher` is the encryption cipher used by the Shadowsocks proxy.
 // `isUDPEnabled` indicates if the Shadowsocks proxy and the network support proxying UDP traffic.
 // `tunWriter` is used to output packets back to the TUN device.  OutlineTunnel.Disconnect() will close `tunWriter`.
-func NewOutlineTunnel(host string, port int, password, cipher string, isUDPEnabled bool, tunWriter io.WriteCloser) (OutlineTunnel, error) {
+func NewTunnel(host string, port int, password, cipher string, isUDPEnabled bool, tunWriter io.WriteCloser) (Tunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("Must provide a TUN writer")
 	}
@@ -65,8 +67,9 @@ func NewOutlineTunnel(host string, port int, password, cipher string, isUDPEnabl
 	core.RegisterOutputFn(func(data []byte) (int, error) {
 		return tunWriter.Write(data)
 	})
-	base := &tunnel{tunWriter, core.NewLWIPStack(), true}
-	t := &outlinetunnel{base, host, port, password, cipher, isUDPEnabled}
+	lwipStack := core.NewLWIPStack()
+	base := tunnel.NewTunnel(tunWriter, lwipStack)
+	t := &outlinetunnel{base, lwipStack, host, port, password, cipher, isUDPEnabled}
 	t.registerConnectionHandlers()
 	return t, nil
 }

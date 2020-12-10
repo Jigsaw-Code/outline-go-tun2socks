@@ -31,8 +31,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/doh/ipmap"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/split"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/doh/ipmap"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/split"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 

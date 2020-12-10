@@ -24,8 +24,8 @@ import (
 	"github.com/eycorsican/go-tun2socks/common/log"
 	"github.com/eycorsican/go-tun2socks/core"
 
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/doh"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/split"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/doh"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/split"
 )
 
 // TCPHandler is a core TCP handler that also supports DOH and splitting control.

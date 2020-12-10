@@ -56,3 +56,7 @@ func (t *tunnel) Write(data []byte) (int, error) {
 	}
 	return t.lwipStack.Write(data)
 }
+
+func NewTunnel(tunWriter io.WriteCloser, lwipStack core.LWIPStack) Tunnel {
+	return &tunnel{tunWriter, lwipStack, true}
+}
