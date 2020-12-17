@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/choir"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel/intra/doh"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/doh"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
