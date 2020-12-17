@@ -130,7 +130,7 @@ func (h *udpHandler) Connect(conn core.UDPConn, target *net.UDPAddr) error {
 
 func (h *udpHandler) doDoh(dns doh.Transport, t *tracker, conn core.UDPConn, data []byte) {
 	resp, err := dns.Query(data)
-	if err == nil {
+	if resp != nil {
 		_, err = conn.WriteFrom(resp, &h.fakedns)
 	}
 	if err != nil {
