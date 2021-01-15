@@ -81,7 +81,8 @@ type Listener interface {
 // so it has to be very simple.
 type Transport interface {
 	// Given a DNS query (including ID), returns a DNS response with matching
-	// ID, and/or an error if no response was received.
+	// ID, or an error if no response was received.  The error may be accompanied
+	// by a SERVFAIL response if appropriate.
 	Query(q []byte) ([]byte, error)
 	// Return the server URL used to initialize this transport.
 	GetURL() string
@@ -90,15 +91,15 @@ type Transport interface {
 // TODO: Keep a context here so that queries can be canceled.
 type transport struct {
 	Transport
-	url          string
-	hostname     string
-	port         int
-	ips          ipmap.IPMap
-	client       http.Client
-	dialer       *net.Dialer
-	listener     Listener
-	hangoverLock sync.RWMutex
-	hangover     time.Time // Hangover expires at this time.
+	url                string
+	hostname           string
+	port               int
+	ips                ipmap.IPMap
+	client             http.Client
+	dialer             *net.Dialer
+	listener           Listener
+	hangoverLock       sync.RWMutex
+	hangoverExpiration time.Time
 }
 
 // Wait up to three seconds for the TCP handshake to complete.
@@ -249,7 +250,7 @@ func (t *transport) doQuery(q []byte) (response []byte, server *net.TCPAddr, qer
 	}
 
 	t.hangoverLock.RLock()
-	inHangover := time.Now().Before(t.hangover)
+	inHangover := time.Now().Before(t.hangoverExpiration)
 	t.hangoverLock.RUnlock()
 	if inHangover {
 		response = tryServfail(q)
@@ -293,7 +294,7 @@ func (t *transport) doQuery(q []byte) (response []byte, server *net.TCPAddr, qer
 	if qerr != nil {
 		if qerr.status != SendFailed {
 			t.hangoverLock.Lock()
-			t.hangover = time.Now().Add(hangoverDuration)
+			t.hangoverExpiration = time.Now().Add(hangoverDuration)
 			t.hangoverLock.Unlock()
 		}
 
