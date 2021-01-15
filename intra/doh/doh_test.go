@@ -45,8 +45,8 @@ var simpleQuery dnsmessage.Message = dnsmessage.Message{
 		Response:           false,
 		OpCode:             0,
 		Authoritative:      false,
-		Truncated:          true,
-		RecursionDesired:   false,
+		Truncated:          false,
+		RecursionDesired:   true,
 		RecursionAvailable: false,
 		RCode:              0,
 	},
@@ -821,3 +821,28 @@ func TestAddEdnsPaddingCompressedPaddedQuery(t *testing.T) {
 		t.Errorf("AddEdnsPadding tampered with a query that was already padded")
 	}
 }
+
+func TestServfail(t *testing.T) {
+	sf, err := Servfail(simpleQueryBytes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	servfail := mustUnpack(sf)
+	expectedHeader := dnsmessage.Header{
+		ID:                 0xbeef,
+		Response:           true,
+		OpCode:             0,
+		Authoritative:      false,
+		Truncated:          false,
+		RecursionDesired:   true,
+		RecursionAvailable: true,
+		RCode:              2,
+	}
+	if servfail.Header != expectedHeader {
+		t.Errorf("Wrong header: %v != %v", servfail.Header, expectedHeader)
+	}
+	if servfail.Questions[0] != simpleQuery.Questions[0] {
+		t.Errorf("Wrong question: %v", servfail.Questions[0])
+	}
+}
+
