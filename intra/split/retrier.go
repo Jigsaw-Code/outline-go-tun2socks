@@ -126,7 +126,7 @@ func DialWithSplitRetry(dialer *net.Dialer, addr *net.TCPAddr, stats *RetryStats
 	after := time.Now()
 
 	if stats == nil {
-		// This is a dummy stats object that will be written but never read.  Its purpose
+		// This is a fake stats object that will be written but never read.  Its purpose
 		// is to avoid the need for nil checks at each point where stats are updated.
 		stats = &RetryStats{}
 	}

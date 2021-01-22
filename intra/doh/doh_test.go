@@ -711,9 +711,9 @@ func TestAddEdnsPaddingIdempotent(t *testing.T) {
 	}
 }
 
-// Sanity check that packing |compressedQueryBytes| constructs the same query
+// Check that packing |compressedQueryBytes| constructs the same query
 // byte-for-byte.
-func TestDnsMessageCompressedQuerySanityCheck(t *testing.T) {
+func TestDnsMessageCompressedQueryConfidenceCheck(t *testing.T) {
 	m := mustUnpack(compressedQueryBytes)
 	packedBytes := mustPack(m)
 	if len(packedBytes) != len(compressedQueryBytes) {
@@ -721,9 +721,9 @@ func TestDnsMessageCompressedQuerySanityCheck(t *testing.T) {
 	}
 }
 
-// Sanity check that packing |uncompressedQueryBytes| constructs a smaller
+// Check that packing |uncompressedQueryBytes| constructs a smaller
 // query byte-for-byte, since label compression is enabled by default.
-func TestDnsMessageUncompressedQuerySanityCheck(t *testing.T) {
+func TestDnsMessageUncompressedQueryConfidenceCheck(t *testing.T) {
 	m := mustUnpack(uncompressedQueryBytes)
 	packedBytes := mustPack(m)
 	if len(packedBytes) >= len(uncompressedQueryBytes) {
