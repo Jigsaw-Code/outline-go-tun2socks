@@ -173,7 +173,7 @@ func TestFetchConfig(t *testing.T) {
 
 	t.Run("Method", func(t *testing.T) {
 		req := FetchConfigRequest{
-			fmt.Sprintf("https://%s/200", serverAddr), "GET", certFingerprint}
+			fmt.Sprintf("https://%s/200-post", serverAddr), "POST", certFingerprint}
 		res, err := FetchConfig(req)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
