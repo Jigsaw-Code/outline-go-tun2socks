@@ -89,7 +89,7 @@ func FetchConfig(req FetchConfigRequest) (*FetchConfigResponse, error) {
 		Timeout: 30 * time.Second,
 	}
 
-	if req.TrustedCertFingerprint != nil {
+	if req.TrustedCertFingerprint != nil && len(req.TrustedCertFingerprint) != 0 {
 		client.Transport = &http.Transport{
 			// Perform custom server certificate verification by pinning the
 			// trusted certificate fingerprint.
