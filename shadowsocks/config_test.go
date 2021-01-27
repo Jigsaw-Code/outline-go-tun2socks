@@ -86,9 +86,10 @@ func TestFetchConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to generate TLS certificate: %v", err)
 	}
-	certFingerprint := computeCertificateFingerprint(cert.Leaf)
+	certFingerprint := computeCertificateFingerprint(cert.Certificate[0])
 	server := makeOnlineConfigServer(serverAddr, cert)
 	go server.ListenAndServeTLS("", "")
+	defer server.Close()
 
 	t.Run("Success", func(t *testing.T) {
 		req := FetchConfigRequest{
@@ -161,8 +162,6 @@ func TestFetchConfig(t *testing.T) {
 			t.Fatalf("Expected error for non-HTTPs URL")
 		}
 	})
-
-	server.Close()
 }
 
 // HTTP handler for a fake online config server.
@@ -170,7 +169,7 @@ type onlineConfigHandler struct{}
 
 func (h onlineConfigHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if req.URL.Path == "/200" {
-		res := sip008Response{proxies}
+		res := sip008Response{proxies, 1}
 		data, _ := json.Marshal(res)
 		h.sendResponse(w, 200, data)
 	} else if req.URL.Path == "/404" {
@@ -228,16 +227,10 @@ func makeTLSCertificate() (tls.Certificate, error) {
 	if err != nil {
 		return tls.Certificate{}, err
 	}
-	// Generate the x509 certificate so we can more readily compute its fingerprint.
-	x509Cert, err := x509.ParseCertificate(derCert)
-	if err != nil {
-		return tls.Certificate{}, err
-	}
 
 	var cert tls.Certificate
 	cert.Certificate = append(cert.Certificate, derCert)
 	cert.PrivateKey = key
-	cert.Leaf = x509Cert
 	return cert, nil
 }
 
@@ -247,12 +240,8 @@ func TestComputeCertificateFingerprint(t *testing.T) {
 	if block == nil || block.Type != "CERTIFICATE" {
 		t.Fatalf("Failed to decode certificate PEM block")
 	}
-	cert, err := x509.ParseCertificate(block.Bytes)
-	if err != nil {
-		t.Fatalf("Failed to parse certificate: %v", err)
-	}
 
-	certFingerprint := computeCertificateFingerprint(cert)
+	certFingerprint := computeCertificateFingerprint(block.Bytes)
 	if certFingerprint != exampleCertFingerprint {
 		t.Errorf("Certificate fingerprints don't match. Want %s, got %s",
 			exampleCertFingerprint, certFingerprint)

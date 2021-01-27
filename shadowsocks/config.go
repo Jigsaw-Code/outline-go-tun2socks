@@ -62,6 +62,7 @@ type FetchConfigResponse struct {
 // sip008Response represents a JSON response from an online config server.
 type sip008Response struct {
 	Proxies []ProxyConfig `json:"servers"`
+	Version int
 }
 
 // FetchConfig retrieves Shadowsocks proxy configurations per SIP008:
@@ -90,7 +91,12 @@ func FetchConfig(req FetchConfigRequest) (*FetchConfigResponse, error) {
 
 	if req.TrustedCertFingerprint != "" {
 		client.Transport = &http.Transport{
-			DialTLSContext: makePinnedCertTLSDialer(req.TrustedCertFingerprint),
+			// Perform custom server certificate verification by pinning the
+			// trusted certificate fingerprint.
+			TLSClientConfig: &tls.Config{
+				InsecureSkipVerify:    true,
+				VerifyPeerCertificate: makePinnedCertVerifier(req.TrustedCertFingerprint),
+			},
 		}
 	}
 
@@ -120,30 +126,26 @@ func FetchConfig(req FetchConfigRequest) (*FetchConfigResponse, error) {
 
 type tlsDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
-// Returns a dial TLS context that pins trustedCertFingerprint for certificate
-// validation. Trusts the connection if the server certificate fingerprint
-// matches the pinned certificate fingerprint, regardless of the system's
-// TLS certificate validation errors.
-func makePinnedCertTLSDialer(trustedCertFingerprint string) tlsDialer {
-	return func(ctx context.Context, network, addr string) (net.Conn, error) {
-		c, err := tls.Dial(network, addr, &tls.Config{InsecureSkipVerify: true})
-		if err != nil {
-			return c, err
-		}
-		connState := c.ConnectionState()
-		for _, cert := range connState.PeerCertificates {
+type certVerifier func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
+
+// Verifies whether the pinned  certificate SHA256 fingerprint,
+// trustedCertFingerprint, matches a fingerprint in the certificate chain,
+// regardless of the system's TLS certificate validation errors.
+func makePinnedCertVerifier(trustedCertFingerprint string) certVerifier {
+	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+		for _, cert := range rawCerts {
 			fingerprint := computeCertificateFingerprint(cert)
 			if fingerprint == trustedCertFingerprint {
-				return c, nil
+				return nil
 			}
 		}
-		return nil, errors.New("Failed to validate TLS certificate")
+		return errors.New("Failed to validate TLS certificate")
 	}
 }
 
 // Computes the sha256 digest of the whole DER-encoded certificate and
 // returns it as a base64-encoded string.
-func computeCertificateFingerprint(cert *x509.Certificate) string {
-	digest := sha256.Sum256(cert.Raw)
+func computeCertificateFingerprint(derCert []byte) string {
+	digest := sha256.Sum256(derCert)
 	return base64.StdEncoding.EncodeToString(digest[:])
 }
