@@ -81,14 +81,19 @@ var proxies = []ProxyConfig{
 }
 
 func TestFetchConfig(t *testing.T) {
-	serverAddr := "127.0.0.1:9999"
 	cert, err := makeTLSCertificate()
 	if err != nil {
 		t.Fatalf("Failed to generate TLS certificate: %v", err)
 	}
+
 	certFingerprint := computeCertificateFingerprint(cert.Certificate[0])
-	server := makeOnlineConfigServer(serverAddr, cert)
-	go server.ListenAndServeTLS("", "")
+	server := makeOnlineConfigServer(cert)
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("Failed to start online config server: %v", err)
+	}
+	serverAddr := listener.Addr()
+	go server.ServeTLS(listener, "", "")
 	defer server.Close()
 
 	t.Run("Success", func(t *testing.T) {
@@ -187,12 +192,11 @@ func (onlineConfigHandler) sendResponse(w http.ResponseWriter, code int, data []
 }
 
 // Returns a SIP008 online config HTTPs server with TLS certificate cert.
-func makeOnlineConfigServer(addr string, cert tls.Certificate) http.Server {
+func makeOnlineConfigServer(cert tls.Certificate) http.Server {
 	tlsConfig := &tls.Config{
 		Certificates: []tls.Certificate{cert},
 	}
 	return http.Server{
-		Addr:      addr,
 		TLSConfig: tlsConfig,
 		Handler:   onlineConfigHandler{},
 	}
@@ -209,7 +213,6 @@ func makeTLSCertificate() (tls.Certificate, error) {
 		IPAddresses:           []net.IP{net.IPv4(127, 0, 0, 1)}, // Valid for localhost
 		NotBefore:             now,
 		NotAfter:              now.AddDate(0, 0, 1), // Valid for one day
-		SubjectKeyId:          []byte{55, 43, 04, 45, 87, 65},
 		BasicConstraintsValid: true,
 		IsCA:                  true, // Self-signed
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
