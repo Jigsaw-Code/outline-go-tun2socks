@@ -15,11 +15,13 @@
 package shadowsocks
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -72,7 +74,7 @@ XJKP0xgIF3B6wqNLbDr648/2/n7JVuWlThsUT6mYnXmxHsOrsQ0VhalGtuXCWOha
 /sgUKGiQxrjIlH/hD4n6p9YJN6FitwAntb7xsV5FKAazVBXmw8isggHOhuIr4Xrk
 vUzLnF7QYsJhvYtaYrZ2MLxGD+NFI8BkXw==
 -----END CERTIFICATE-----`
-	exampleCertFingerprint = "IA3K+nZ8hFDs5kSHnAYqDN9SJA/gW7frKEYRw67z7C4="
+	exampleCertFingerprintBase64 = "IA3K+nZ8hFDs5kSHnAYqDN9SJA/gW7frKEYRw67z7C4="
 )
 
 var proxies = []ProxyConfig{
@@ -150,12 +152,37 @@ func TestFetchConfig(t *testing.T) {
 		}
 	})
 
-	t.Run("CertificateFingerprint", func(t *testing.T) {
+	t.Run("WrongCertificateFingerprint", func(t *testing.T) {
+		wrongCertFp := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
 		req := FetchConfigRequest{
-			fmt.Sprintf("https://%s/success", serverAddr), "GET", "wrongcertfp"}
+			fmt.Sprintf("https://%s/success", serverAddr), "GET", wrongCertFp}
 		_, err := FetchConfig(req)
 		if err == nil {
 			t.Fatalf("Expected TLS certificate validation error")
+		}
+	})
+
+	t.Run("MissingCertificateFingerprint", func(t *testing.T) {
+		req := FetchConfigRequest{
+			fmt.Sprintf("https://%s/success", serverAddr), "GET", nil}
+		_, err := FetchConfig(req)
+		if err == nil {
+			t.Fatalf("Expected TLS certificate validation error")
+		}
+	})
+
+	t.Run("Method", func(t *testing.T) {
+		req := FetchConfigRequest{
+			fmt.Sprintf("https://%s/200", serverAddr), "GET", certFingerprint}
+		res, err := FetchConfig(req)
+		if err != nil {
+			t.Fatalf("Unexpected error: %v", err)
+		}
+		if res.HTTPStatusCode != 200 {
+			t.Errorf("Expected 200 HTTP status code, got %d", res.HTTPStatusCode)
+		}
+		if !reflect.DeepEqual(proxies, res.Proxies) {
+			t.Errorf("Proxy configurations don't match. Want %v, have %v", proxies, res.Proxies)
 		}
 	})
 
@@ -174,15 +201,21 @@ type onlineConfigHandler struct{}
 
 func (h onlineConfigHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	if req.URL.Path == "/200" {
-		res := sip008Response{proxies, 1}
-		data, _ := json.Marshal(res)
-		h.sendResponse(w, 200, data)
-	} else if req.URL.Path == "/404" {
-		h.sendResponse(w, 404, []byte("Not Found"))
+		h.sendOnlineConfig(w)
 	} else if req.URL.Path == "/301" {
 		w.Header().Add("Location", redirectURL)
 		h.sendResponse(w, 301, []byte{})
+	} else if req.URL.Path == "/200-post" && req.Method == "POST" {
+		h.sendOnlineConfig(w)
+	} else {
+		h.sendResponse(w, 404, []byte("Not Found"))
 	}
+}
+
+func (h onlineConfigHandler) sendOnlineConfig(w http.ResponseWriter) {
+	res := sip008Response{proxies, 1}
+	data, _ := json.Marshal(res)
+	h.sendResponse(w, 200, data)
 }
 
 func (onlineConfigHandler) sendResponse(w http.ResponseWriter, code int, data []byte) {
@@ -243,10 +276,13 @@ func TestComputeCertificateFingerprint(t *testing.T) {
 	if block == nil || block.Type != "CERTIFICATE" {
 		t.Fatalf("Failed to decode certificate PEM block")
 	}
-
-	certFingerprint := computeCertificateFingerprint(block.Bytes)
-	if certFingerprint != exampleCertFingerprint {
-		t.Errorf("Certificate fingerprints don't match. Want %s, got %s",
-			exampleCertFingerprint, certFingerprint)
+	expectedCertFp, err := base64.StdEncoding.DecodeString(exampleCertFingerprintBase64)
+	if err != nil {
+		t.Fatalf("Failed to decode certificate fingerprint: %v", err)
+	}
+	actualCertFp := computeCertificateFingerprint(block.Bytes)
+	if !bytes.Equal(actualCertFp, expectedCertFp) {
+		t.Errorf("Certificate fingerprints don't match. Want %v, got %v",
+			expectedCertFp, actualCertFp)
 	}
 }

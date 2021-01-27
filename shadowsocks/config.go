@@ -15,11 +15,11 @@
 package shadowsocks
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"net"
@@ -44,9 +44,9 @@ type FetchConfigRequest struct {
 	URL string
 	// Method is the HTTP method to use in the request.
 	Method string
-	// TrustedCertFingerprint is the base64-encoded sha256 hash of the online
-	// config server's TLS certificate.
-	TrustedCertFingerprint string
+	// TrustedCertFingerprint is the sha256 hash of the online config server's
+	// TLS certificate.
+	TrustedCertFingerprint []byte
 }
 
 // FetchConfigResponse encapsulates a response and metadata from an online config server.
@@ -89,7 +89,7 @@ func FetchConfig(req FetchConfigRequest) (*FetchConfigResponse, error) {
 		Timeout: 30 * time.Second,
 	}
 
-	if req.TrustedCertFingerprint != "" {
+	if req.TrustedCertFingerprint != nil {
 		client.Transport = &http.Transport{
 			// Perform custom server certificate verification by pinning the
 			// trusted certificate fingerprint.
@@ -131,11 +131,11 @@ type certVerifier func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) 
 // Verifies whether the pinned  certificate SHA256 fingerprint,
 // trustedCertFingerprint, matches a fingerprint in the certificate chain,
 // regardless of the system's TLS certificate validation errors.
-func makePinnedCertVerifier(trustedCertFingerprint string) certVerifier {
+func makePinnedCertVerifier(trustedCertFingerprint []byte) certVerifier {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		for _, cert := range rawCerts {
 			fingerprint := computeCertificateFingerprint(cert)
-			if fingerprint == trustedCertFingerprint {
+			if bytes.Equal(fingerprint, trustedCertFingerprint) {
 				return nil
 			}
 		}
@@ -145,7 +145,7 @@ func makePinnedCertVerifier(trustedCertFingerprint string) certVerifier {
 
 // Computes the sha256 digest of the whole DER-encoded certificate and
 // returns it as a base64-encoded string.
-func computeCertificateFingerprint(derCert []byte) string {
-	digest := sha256.Sum256(derCert)
-	return base64.StdEncoding.EncodeToString(digest[:])
+func computeCertificateFingerprint(derCert []byte) []byte {
+	hash := sha256.Sum256(derCert)
+	return hash[:]
 }
