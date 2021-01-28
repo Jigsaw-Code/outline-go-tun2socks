@@ -24,6 +24,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
 	"net"
@@ -77,9 +78,9 @@ vUzLnF7QYsJhvYtaYrZ2MLxGD+NFI8BkXw==
 	exampleCertFingerprintBase64 = "IA3K+nZ8hFDs5kSHnAYqDN9SJA/gW7frKEYRw67z7C4="
 )
 
-var proxies = []ProxyConfig{
-	{"ssconf.test", 123, "passw0rd", "chacha20-ietf-poly1305", "ssconf-test-1", "", ""},
-	{"ssconf-ii.test", 456, "dr0wssap", "chacha20-ietf-poly1305", "ssconf-test-2", "", ""},
+var proxies = []Config{
+	{"0", "ssconf.test", 123, "passw0rd", "chacha20-ietf-poly1305", "ssconf-test-1", "plugin", "opts"},
+	{"1", "ssconf-ii.test", 456, "dr0wssap", "chacha20-ietf-poly1305", "ssconf-test-2", "", ""},
 }
 
 func TestFetchConfig(t *testing.T) {
@@ -111,8 +112,9 @@ func TestFetchConfig(t *testing.T) {
 		if res.RedirectURL != "" {
 			t.Errorf("Unexpected redirect URL: %s", res.RedirectURL)
 		}
-		if !reflect.DeepEqual(proxies, res.Proxies) {
-			t.Errorf("Proxy configurations don't match. Want %v, have %v", proxies, res.Proxies)
+		if !reflect.DeepEqual(proxies, res.Config.Proxies) {
+			t.Errorf("Proxy configurations don't match. Want %v, have %v",
+				proxies, res.Config.Proxies)
 		}
 	})
 
@@ -129,8 +131,9 @@ func TestFetchConfig(t *testing.T) {
 		if res.RedirectURL != "" {
 			t.Errorf("Unexpected redirect URL: %s", res.RedirectURL)
 		}
-		if len(res.Proxies) > 0 {
-			t.Errorf("Expected empty proxy configurations, got: %v", res.Proxies)
+		if len(res.Config.Proxies) > 0 {
+			t.Errorf("Expected empty proxy configurations, got: %v",
+				res.Config.Proxies)
 		}
 	})
 
@@ -147,8 +150,8 @@ func TestFetchConfig(t *testing.T) {
 		if res.RedirectURL != redirectURL {
 			t.Errorf("Expected redirect URL %s , got %s", redirectURL, res.RedirectURL)
 		}
-		if len(res.Proxies) > 0 {
-			t.Errorf("Expected empty proxy configurations, got: %v", res.Proxies)
+		if len(res.Config.Proxies) > 0 {
+			t.Errorf("Expected empty proxy configurations, got: %v", res.Config.Proxies)
 		}
 	})
 
@@ -158,7 +161,12 @@ func TestFetchConfig(t *testing.T) {
 			fmt.Sprintf("https://%s/success", serverAddr), "GET", wrongCertFp}
 		_, err := FetchConfig(req)
 		if err == nil {
-			t.Fatalf("Expected TLS certificate validation error")
+			t.Errorf("Expected TLS certificate validation error")
+		}
+		var certErr x509.CertificateInvalidError
+		if !errors.As(err, &certErr) {
+			t.Errorf("Expected invalid certificate error, got %v",
+				reflect.TypeOf(err))
 		}
 	})
 
@@ -167,7 +175,12 @@ func TestFetchConfig(t *testing.T) {
 			fmt.Sprintf("https://%s/success", serverAddr), "GET", nil}
 		_, err := FetchConfig(req)
 		if err == nil {
-			t.Fatalf("Expected TLS certificate validation error")
+			t.Errorf("Expected certificate validation error")
+		}
+		var authErr x509.UnknownAuthorityError
+		if !errors.As(err, &authErr) {
+			t.Errorf("Expected unknown authority error, got %v",
+				reflect.TypeOf(err))
 		}
 	})
 
@@ -181,8 +194,9 @@ func TestFetchConfig(t *testing.T) {
 		if res.HTTPStatusCode != 200 {
 			t.Errorf("Expected 200 HTTP status code, got %d", res.HTTPStatusCode)
 		}
-		if !reflect.DeepEqual(proxies, res.Proxies) {
-			t.Errorf("Proxy configurations don't match. Want %v, have %v", proxies, res.Proxies)
+		if !reflect.DeepEqual(proxies, res.Config.Proxies) {
+			t.Errorf("Proxy configurations don't match. Want %v, have %v",
+				proxies, res.Config.Proxies)
 		}
 	})
 
@@ -192,6 +206,32 @@ func TestFetchConfig(t *testing.T) {
 		_, err := FetchConfig(req)
 		if err == nil {
 			t.Fatalf("Expected error for non-HTTPs URL")
+		}
+	})
+
+	t.Run("SyntaxError", func(t *testing.T) {
+		req := FetchConfigRequest{
+			fmt.Sprintf("https://%s/200-invalid-syntax", serverAddr), "GET", certFingerprint}
+		_, err := FetchConfig(req)
+		if err == nil {
+			t.Errorf("Expected JSON syntax error")
+		}
+		var jsonErr *json.SyntaxError
+		if !errors.As(err, &jsonErr) {
+			t.Errorf("Expected JSON syntax error, got %v", reflect.TypeOf(err))
+		}
+	})
+
+	t.Run("DecodingError", func(t *testing.T) {
+		req := FetchConfigRequest{
+			fmt.Sprintf("https://%s/200-invalid-type", serverAddr), "GET", certFingerprint}
+		_, err := FetchConfig(req)
+		if err == nil {
+			t.Errorf("Expected JSON decoding error")
+		}
+		var jsonErr *json.UnmarshalTypeError
+		if !errors.As(err, &jsonErr) {
+			t.Errorf("Expected JSON decoding error, got %v", reflect.TypeOf(err))
 		}
 	})
 }
@@ -207,13 +247,17 @@ func (h onlineConfigHandler) ServeHTTP(w http.ResponseWriter, req *http.Request)
 		h.sendResponse(w, 301, []byte{})
 	} else if req.URL.Path == "/200-post" && req.Method == "POST" {
 		h.sendOnlineConfig(w)
+	} else if req.URL.Path == "/200-invalid-syntax" {
+		h.sendResponse(w, 200, []byte("{invalid SIP008 JSON}"))
+	} else if req.URL.Path == "/200-invalid-type" {
+		h.sendResponse(w, 200, []byte(`{"version": 1, "servers": [{"server": 123}]}`))
 	} else {
 		h.sendResponse(w, 404, []byte("Not Found"))
 	}
 }
 
 func (h onlineConfigHandler) sendOnlineConfig(w http.ResponseWriter) {
-	res := sip008Response{proxies, 1}
+	res := OnlineConfig{proxies, 1}
 	data, _ := json.Marshal(res)
 	h.sendResponse(w, 200, data)
 }

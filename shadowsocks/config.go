@@ -27,8 +27,9 @@ import (
 	"time"
 )
 
-// ProxyConfig represents a Shadowsocks proxy configuration.
-type ProxyConfig struct {
+// Config represents a Shadowsocks proxy configuration.
+type Config struct {
+	ID         string
 	Host       string `json:"server"`
 	Port       int    `json:"server_port"`
 	Password   string `json:"password"`
@@ -49,19 +50,19 @@ type FetchConfigRequest struct {
 	TrustedCertFingerprint []byte
 }
 
-// FetchConfigResponse encapsulates a response and metadata from an online config server.
+// FetchConfigResponse encapsulates a response from an online config server.
 type FetchConfigResponse struct {
-	// Proxies is a list of Shadowsocks proxy configurations
-	Proxies []ProxyConfig
+	// Config is the parsed server response.
+	Config OnlineConfig
 	// HTTPStatusCode is the HTTP status code of the response.
 	HTTPStatusCode int
 	// RedirectURL is the Location header of a HTTP redirect response.
 	RedirectURL string
 }
 
-// sip008Response represents a JSON response from an online config server.
-type sip008Response struct {
-	Proxies []ProxyConfig `json:"servers"`
+// OnlineConfig represents a SIP008 response from an online config server.
+type OnlineConfig struct {
+	Proxies []Config `json:"servers"`
 	Version int
 }
 
@@ -118,9 +119,9 @@ func FetchConfig(req FetchConfigRequest) (*FetchConfigResponse, error) {
 
 	// 2xx status code
 	defer httpres.Body.Close()
-	var sip008res sip008Response
-	err = json.NewDecoder(httpres.Body).Decode(&sip008res)
-	res.Proxies = sip008res.Proxies
+	var config OnlineConfig
+	err = json.NewDecoder(httpres.Body).Decode(&config)
+	res.Config = config
 	return &res, err
 }
 
@@ -128,7 +129,7 @@ type tlsDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
 type certVerifier func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
 
-// Verifies whether the pinned  certificate SHA256 fingerprint,
+// Verifies whether the pinned certificate SHA256 fingerprint,
 // trustedCertFingerprint, matches a fingerprint in the certificate chain,
 // regardless of the system's TLS certificate validation errors.
 func makePinnedCertVerifier(trustedCertFingerprint []byte) certVerifier {
@@ -139,12 +140,12 @@ func makePinnedCertVerifier(trustedCertFingerprint []byte) certVerifier {
 				return nil
 			}
 		}
-		return errors.New("Failed to validate TLS certificate")
+		return x509.CertificateInvalidError{
+			nil, x509.NotAuthorizedToSign, "Failed to validate pinned TLS certificate"}
 	}
 }
 
-// Computes the sha256 digest of the whole DER-encoded certificate and
-// returns it as a base64-encoded string.
+// Computes the sha256 digest of the whole DER-encoded certificate
 func computeCertificateFingerprint(derCert []byte) []byte {
 	hash := sha256.Sum256(derCert)
 	return hash[:]
