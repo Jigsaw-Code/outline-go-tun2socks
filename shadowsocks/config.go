@@ -16,13 +16,11 @@ package shadowsocks
 
 import (
 	"bytes"
-	"context"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
 	"errors"
-	"net"
 	"net/http"
 	"time"
 )
@@ -124,8 +122,6 @@ func FetchConfig(req FetchConfigRequest) (*FetchConfigResponse, error) {
 	res.Config = config
 	return &res, err
 }
-
-type tlsDialer func(ctx context.Context, network, addr string) (net.Conn, error)
 
 type certVerifier func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error
 
