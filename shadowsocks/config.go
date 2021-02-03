@@ -116,7 +116,7 @@ func FetchOnlineConfig(req OnlineConfigRequest) (*OnlineConfigResponse, error) {
 		// Redirect
 		res.RedirectURL = httpres.Header.Get("Location")
 		return &res, nil
-	} else if res.HTTPStatusCode > 400 {
+	} else if res.HTTPStatusCode >= 400 {
 		// HTTP error
 		return &res, nil
 	}
