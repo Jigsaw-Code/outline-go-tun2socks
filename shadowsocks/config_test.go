@@ -15,15 +15,13 @@
 package shadowsocks
 
 import (
-	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"errors"
 	"fmt"
 	"math/big"
@@ -34,62 +32,21 @@ import (
 	"time"
 )
 
-const (
-	redirectURL    = "https://127.0.0.1/200/"
-	examplePemCert = `-----BEGIN CERTIFICATE-----
-MIIG1TCCBb2gAwIBAgIQD74IsIVNBXOKsMzhya/uyTANBgkqhkiG9w0BAQsFADBP
-MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMSkwJwYDVQQDEyBE
-aWdpQ2VydCBUTFMgUlNBIFNIQTI1NiAyMDIwIENBMTAeFw0yMDExMjQwMDAwMDBa
-Fw0yMTEyMjUyMzU5NTlaMIGQMQswCQYDVQQGEwJVUzETMBEGA1UECBMKQ2FsaWZv
-cm5pYTEUMBIGA1UEBxMLTG9zIEFuZ2VsZXMxPDA6BgNVBAoTM0ludGVybmV0IENv
-cnBvcmF0aW9uIGZvciBBc3NpZ25lZCBOYW1lcyBhbmQgTnVtYmVyczEYMBYGA1UE
-AxMPd3d3LmV4YW1wbGUub3JnMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKC
-AQEAuvzuzMoKCP8Okx2zvgucA5YinrFPEK5RQP1TX7PEYUAoBO6i5hIAsIKFmFxt
-W2sghERilU5rdnxQcF3fEx3sY4OtY6VSBPLPhLrbKozHLrQ8ZN/rYTb+hgNUeT7N
-A1mP78IEkxAj4qG5tli4Jq41aCbUlCt7equGXokImhC+UY5IpQEZS0tKD4vu2ksZ
-04Qetp0k8jWdAvMA27W3EwgHHNeVGWbJPC0Dn7RqPw13r7hFyS5TpleywjdY1nB7
-ad6kcZXZbEcaFZ7ZuerA6RkPGE+PsnZRb1oFJkYoXimsuvkVFhWeHQXCGC1cuDWS
-rM3cpQvOzKH2vS7d15+zGls4IwIDAQABo4IDaTCCA2UwHwYDVR0jBBgwFoAUt2ui
-6qiqhIx56rTaD5iyxZV2ufQwHQYDVR0OBBYEFCYa+OSxsHKEztqBBtInmPvtOj0X
-MIGBBgNVHREEejB4gg93d3cuZXhhbXBsZS5vcmeCC2V4YW1wbGUuY29tggtleGFt
-cGxlLmVkdYILZXhhbXBsZS5uZXSCC2V4YW1wbGUub3Jngg93d3cuZXhhbXBsZS5j
-b22CD3d3dy5leGFtcGxlLmVkdYIPd3d3LmV4YW1wbGUubmV0MA4GA1UdDwEB/wQE
-AwIFoDAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwgYsGA1UdHwSBgzCB
-gDA+oDygOoY4aHR0cDovL2NybDMuZGlnaWNlcnQuY29tL0RpZ2lDZXJ0VExTUlNB
-U0hBMjU2MjAyMENBMS5jcmwwPqA8oDqGOGh0dHA6Ly9jcmw0LmRpZ2ljZXJ0LmNv
-bS9EaWdpQ2VydFRMU1JTQVNIQTI1NjIwMjBDQTEuY3JsMEwGA1UdIARFMEMwNwYJ
-YIZIAYb9bAEBMCowKAYIKwYBBQUHAgEWHGh0dHBzOi8vd3d3LmRpZ2ljZXJ0LmNv
-bS9DUFMwCAYGZ4EMAQICMH0GCCsGAQUFBwEBBHEwbzAkBggrBgEFBQcwAYYYaHR0
-cDovL29jc3AuZGlnaWNlcnQuY29tMEcGCCsGAQUFBzAChjtodHRwOi8vY2FjZXJ0
-cy5kaWdpY2VydC5jb20vRGlnaUNlcnRUTFNSU0FTSEEyNTYyMDIwQ0ExLmNydDAM
-BgNVHRMBAf8EAjAAMIIBBQYKKwYBBAHWeQIEAgSB9gSB8wDxAHcA9lyUL9F3MCIU
-VBgIMJRWjuNNExkzv98MLyALzE7xZOMAAAF1+73YbgAABAMASDBGAiEApGuo0EOk
-8QcyLe2cOX136HPBn+0iSgDFvprJtbYS3LECIQCN6F+Kx1LNDaEj1bW729tiE4gi
-1nDsg14/yayUTIxYOgB2AFzcQ5L+5qtFRLFemtRW5hA3+9X6R9yhc5SyXub2xw7K
-AAABdfu92M0AAAQDAEcwRQIgaqwR+gUJEv+bjokw3w4FbsqOWczttcIKPDM0qLAz
-2qwCIQDa2FxRbWQKpqo9izUgEzpql092uWfLvvzMpFdntD8bvTANBgkqhkiG9w0B
-AQsFAAOCAQEApyoQMFy4a3ob+GY49umgCtUTgoL4ZYlXpbjrEykdhGzs++MFEdce
-MV4O4sAA5W0GSL49VW+6txE1turEz4TxMEy7M54RFyvJ0hlLLNCtXxcjhOHfF6I7
-qH9pKXxIpmFfJj914jtbozazHM3jBFcwH/zJ+kuOSIBYJ5yix8Mm3BcC+uZs6oEB
-XJKP0xgIF3B6wqNLbDr648/2/n7JVuWlThsUT6mYnXmxHsOrsQ0VhalGtuXCWOha
-/sgUKGiQxrjIlH/hD4n6p9YJN6FitwAntb7xsV5FKAazVBXmw8isggHOhuIr4Xrk
-vUzLnF7QYsJhvYtaYrZ2MLxGD+NFI8BkXw==
------END CERTIFICATE-----`
-	exampleCertFingerprintBase64 = "IA3K+nZ8hFDs5kSHnAYqDN9SJA/gW7frKEYRw67z7C4="
-)
+const redirectURL = "https://127.0.0.1/200/"
 
-var proxies = []Config{
+var proxies = []ProxyConfig{
 	{"0", "ssconf.test", 123, "passw0rd", "chacha20-ietf-poly1305", "ssconf-test-1", "plugin", "opts"},
 	{"1", "ssconf-ii.test", 456, "dr0wssap", "chacha20-ietf-poly1305", "ssconf-test-2", "", ""},
 }
 
-func TestFetchConfig(t *testing.T) {
+func TestFetchOnlineConfig(t *testing.T) {
 	cert, err := makeTLSCertificate()
 	if err != nil {
 		t.Fatalf("Failed to generate TLS certificate: %v", err)
 	}
 
-	certFingerprint := computeCertificateFingerprint(cert.Certificate[0])
+	certFingerprintBytes := sha256.Sum256(cert.Certificate[0])
+	certFingerprint := certFingerprintBytes[:]
 	server := makeOnlineConfigServer(cert)
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -100,9 +57,9 @@ func TestFetchConfig(t *testing.T) {
 	defer server.Close()
 
 	t.Run("Success", func(t *testing.T) {
-		req := FetchConfigRequest{
+		req := OnlineConfigRequest{
 			fmt.Sprintf("https://%s/200", serverAddr), "GET", certFingerprint}
-		res, err := FetchConfig(req)
+		res, err := FetchOnlineConfig(req)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -112,16 +69,16 @@ func TestFetchConfig(t *testing.T) {
 		if res.RedirectURL != "" {
 			t.Errorf("Unexpected redirect URL: %s", res.RedirectURL)
 		}
-		if !reflect.DeepEqual(proxies, res.Config.Proxies) {
+		if !reflect.DeepEqual(proxies, res.OnlineConfig.Proxies) {
 			t.Errorf("Proxy configurations don't match. Want %v, have %v",
-				proxies, res.Config.Proxies)
+				proxies, res.OnlineConfig.Proxies)
 		}
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
-		req := FetchConfigRequest{
+		req := OnlineConfigRequest{
 			fmt.Sprintf("https://%s/404", serverAddr), "GET", certFingerprint}
-		res, err := FetchConfig(req)
+		res, err := FetchOnlineConfig(req)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -131,16 +88,16 @@ func TestFetchConfig(t *testing.T) {
 		if res.RedirectURL != "" {
 			t.Errorf("Unexpected redirect URL: %s", res.RedirectURL)
 		}
-		if len(res.Config.Proxies) > 0 {
+		if len(res.OnlineConfig.Proxies) > 0 {
 			t.Errorf("Expected empty proxy configurations, got: %v",
-				res.Config.Proxies)
+				res.OnlineConfig.Proxies)
 		}
 	})
 
 	t.Run("Redirect", func(t *testing.T) {
-		req := FetchConfigRequest{
+		req := OnlineConfigRequest{
 			fmt.Sprintf("https://%s/301", serverAddr), "GET", certFingerprint}
-		res, err := FetchConfig(req)
+		res, err := FetchOnlineConfig(req)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
@@ -150,16 +107,16 @@ func TestFetchConfig(t *testing.T) {
 		if res.RedirectURL != redirectURL {
 			t.Errorf("Expected redirect URL %s , got %s", redirectURL, res.RedirectURL)
 		}
-		if len(res.Config.Proxies) > 0 {
-			t.Errorf("Expected empty proxy configurations, got: %v", res.Config.Proxies)
+		if len(res.OnlineConfig.Proxies) > 0 {
+			t.Errorf("Expected empty proxy configurations, got: %v", res.OnlineConfig.Proxies)
 		}
 	})
 
 	t.Run("WrongCertificateFingerprint", func(t *testing.T) {
 		wrongCertFp := []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-		req := FetchConfigRequest{
+		req := OnlineConfigRequest{
 			fmt.Sprintf("https://%s/success", serverAddr), "GET", wrongCertFp}
-		_, err := FetchConfig(req)
+		_, err := FetchOnlineConfig(req)
 		if err == nil {
 			t.Errorf("Expected TLS certificate validation error")
 		}
@@ -171,9 +128,9 @@ func TestFetchConfig(t *testing.T) {
 	})
 
 	t.Run("MissingCertificateFingerprint", func(t *testing.T) {
-		req := FetchConfigRequest{
+		req := OnlineConfigRequest{
 			fmt.Sprintf("https://%s/success", serverAddr), "GET", nil}
-		_, err := FetchConfig(req)
+		_, err := FetchOnlineConfig(req)
 		if err == nil {
 			t.Errorf("Expected certificate validation error")
 		}
@@ -185,34 +142,34 @@ func TestFetchConfig(t *testing.T) {
 	})
 
 	t.Run("Method", func(t *testing.T) {
-		req := FetchConfigRequest{
+		req := OnlineConfigRequest{
 			fmt.Sprintf("https://%s/200-post", serverAddr), "POST", certFingerprint}
-		res, err := FetchConfig(req)
+		res, err := FetchOnlineConfig(req)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 		if res.HTTPStatusCode != 200 {
 			t.Errorf("Expected 200 HTTP status code, got %d", res.HTTPStatusCode)
 		}
-		if !reflect.DeepEqual(proxies, res.Config.Proxies) {
+		if !reflect.DeepEqual(proxies, res.OnlineConfig.Proxies) {
 			t.Errorf("Proxy configurations don't match. Want %v, have %v",
-				proxies, res.Config.Proxies)
+				proxies, res.OnlineConfig.Proxies)
 		}
 	})
 
 	t.Run("NonHTTPSURL", func(t *testing.T) {
-		req := FetchConfigRequest{
+		req := OnlineConfigRequest{
 			fmt.Sprintf("http://%s/success", serverAddr), "GET", certFingerprint}
-		_, err := FetchConfig(req)
+		_, err := FetchOnlineConfig(req)
 		if err == nil {
 			t.Fatalf("Expected error for non-HTTPs URL")
 		}
 	})
 
 	t.Run("SyntaxError", func(t *testing.T) {
-		req := FetchConfigRequest{
+		req := OnlineConfigRequest{
 			fmt.Sprintf("https://%s/200-invalid-syntax", serverAddr), "GET", certFingerprint}
-		_, err := FetchConfig(req)
+		_, err := FetchOnlineConfig(req)
 		if err == nil {
 			t.Errorf("Expected JSON syntax error")
 		}
@@ -223,9 +180,9 @@ func TestFetchConfig(t *testing.T) {
 	})
 
 	t.Run("DecodingError", func(t *testing.T) {
-		req := FetchConfigRequest{
+		req := OnlineConfigRequest{
 			fmt.Sprintf("https://%s/200-invalid-type", serverAddr), "GET", certFingerprint}
-		_, err := FetchConfig(req)
+		_, err := FetchOnlineConfig(req)
 		if err == nil {
 			t.Errorf("Expected JSON decoding error")
 		}
@@ -312,21 +269,4 @@ func makeTLSCertificate() (tls.Certificate, error) {
 	cert.Certificate = append(cert.Certificate, derCert)
 	cert.PrivateKey = key
 	return cert, nil
-}
-
-func TestComputeCertificateFingerprint(t *testing.T) {
-	pemCertData := []byte(examplePemCert)
-	block, _ := pem.Decode(pemCertData)
-	if block == nil || block.Type != "CERTIFICATE" {
-		t.Fatalf("Failed to decode certificate PEM block")
-	}
-	expectedCertFp, err := base64.StdEncoding.DecodeString(exampleCertFingerprintBase64)
-	if err != nil {
-		t.Fatalf("Failed to decode certificate fingerprint: %v", err)
-	}
-	actualCertFp := computeCertificateFingerprint(block.Bytes)
-	if !bytes.Equal(actualCertFp, expectedCertFp) {
-		t.Errorf("Certificate fingerprints don't match. Want %v, got %v",
-			expectedCertFp, actualCertFp)
-	}
 }

@@ -21,24 +21,25 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"io/ioutil"
 	"net/http"
 	"time"
 )
 
-// Config represents a Shadowsocks proxy configuration.
-type Config struct {
+// ProxyConfig represents a Shadowsocks proxy configuration.
+type ProxyConfig struct {
 	ID         string
 	Host       string `json:"server"`
 	Port       int    `json:"server_port"`
-	Password   string `json:"password"`
+	Password   string
 	Cipher     string `json:"method"`
 	Name       string `json:"remarks,omitempty"`
 	Plugin     string `json:"plugin,omitempty"`
 	PluginOpts string `json:"plugin_opts,omitempty"`
 }
 
-// FetchConfigRequest encapsulates a request to an online config server.
-type FetchConfigRequest struct {
+// OnlineConfigRequest encapsulates a request to an online config server.
+type OnlineConfigRequest struct {
 	// URL is the HTTPs endpoint of an online config server.
 	URL string
 	// Method is the HTTP method to use in the request.
@@ -48,10 +49,10 @@ type FetchConfigRequest struct {
 	TrustedCertFingerprint []byte
 }
 
-// FetchConfigResponse encapsulates a response from an online config server.
-type FetchConfigResponse struct {
-	// Config is the parsed server response.
-	Config OnlineConfig
+// OnlineConfigResponse encapsulates a response from an online config server.
+type OnlineConfigResponse struct {
+	// OnlineConfig is the parsed server response.
+	OnlineConfig OnlineConfig
 	// HTTPStatusCode is the HTTP status code of the response.
 	HTTPStatusCode int
 	// RedirectURL is the Location header of a HTTP redirect response.
@@ -60,18 +61,18 @@ type FetchConfigResponse struct {
 
 // OnlineConfig represents a SIP008 response from an online config server.
 type OnlineConfig struct {
-	Proxies []Config `json:"servers"`
+	Proxies []ProxyConfig `json:"servers"`
 	Version int
 }
 
-// FetchConfig retrieves Shadowsocks proxy configurations per SIP008:
+// FetchOnlineConfig retrieves Shadowsocks proxy configurations per SIP008:
 // https://github.com/shadowsocks/shadowsocks-org/wiki/SIP008-Online-Configuration-Delivery
 //
 // Pins the trusted certificate when req.TrustedCertFingerprint is non-empty.
 // Sets the response's RedirectURL when the status code is a redirect.
 // Returns an error if req.URL is a non-HTTPS URL, if there is a connection
 // error to the server, or if parsing the configuration fails.
-func FetchConfig(req FetchConfigRequest) (*FetchConfigResponse, error) {
+func FetchOnlineConfig(req OnlineConfigRequest) (*OnlineConfigResponse, error) {
 	httpreq, err := http.NewRequest(req.Method, req.URL, nil)
 	if err != nil {
 		return nil, err
@@ -103,8 +104,13 @@ func FetchConfig(req FetchConfigRequest) (*FetchConfigResponse, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer func() {
+		// Read the response body to EOF and close it, ignoring errors.
+		_, _ = ioutil.ReadAll(httpres.Body)
+		httpres.Body.Close()
+	}()
 
-	var res FetchConfigResponse
+	var res OnlineConfigResponse
 	res.HTTPStatusCode = httpres.StatusCode
 	if res.HTTPStatusCode >= 300 && res.HTTPStatusCode < 400 {
 		// Redirect
@@ -115,11 +121,9 @@ func FetchConfig(req FetchConfigRequest) (*FetchConfigResponse, error) {
 		return &res, nil
 	}
 
-	// 2xx status code
-	defer httpres.Body.Close()
 	var config OnlineConfig
 	err = json.NewDecoder(httpres.Body).Decode(&config)
-	res.Config = config
+	res.OnlineConfig = config
 	return &res, err
 }
 
@@ -130,19 +134,12 @@ type certVerifier func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) 
 // regardless of the system's TLS certificate validation errors.
 func makePinnedCertVerifier(trustedCertFingerprint []byte) certVerifier {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-		for _, cert := range rawCerts {
-			fingerprint := computeCertificateFingerprint(cert)
-			if bytes.Equal(fingerprint, trustedCertFingerprint) {
-				return nil
-			}
+		// Compute the sha256 digest of the whole DER-encoded certificate
+		fingerprint := sha256.Sum256(rawCerts[0])
+		if bytes.Equal(fingerprint[:], trustedCertFingerprint) {
+			return nil
 		}
 		return x509.CertificateInvalidError{
 			nil, x509.NotAuthorizedToSign, "Failed to validate pinned TLS certificate"}
 	}
-}
-
-// Computes the sha256 digest of the whole DER-encoded certificate
-func computeCertificateFingerprint(derCert []byte) []byte {
-	hash := sha256.Sum256(derCert)
-	return hash[:]
 }
