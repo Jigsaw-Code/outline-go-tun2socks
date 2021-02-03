@@ -106,7 +106,7 @@ func FetchOnlineConfig(req OnlineConfigRequest) (*OnlineConfigResponse, error) {
 	}
 	defer func() {
 		// Read the response body to EOF and close it, ignoring errors.
-		_, _ = ioutil.ReadAll(httpres.Body)
+		ioutil.ReadAll(httpres.Body)
 		httpres.Body.Close()
 	}()
 
