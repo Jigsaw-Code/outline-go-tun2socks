@@ -24,6 +24,8 @@ import (
 	"io/ioutil"
 	"net/http"
 	"time"
+
+	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
 // ProxyConfig represents a Shadowsocks proxy configuration.
@@ -123,6 +125,9 @@ func FetchOnlineConfig(req OnlineConfigRequest) (*OnlineConfigResponse, error) {
 
 	var config OnlineConfig
 	err = json.NewDecoder(httpres.Body).Decode(&config)
+	if config.Version != 1 {
+		log.Warnf("Received Shadowsocks online config version %d", config.Version)
+	}
 	res.OnlineConfig = config
 	return &res, err
 }
@@ -134,12 +139,16 @@ type certVerifier func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) 
 // regardless of the system's TLS certificate validation errors.
 func makePinnedCertVerifier(trustedCertFingerprint []byte) certVerifier {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+		if len(rawCerts) == 0 {
+			return x509.CertificateInvalidError{
+				nil, x509.NotAuthorizedToSign, "Did not receive TLS certificate"}
+		}
 		// Compute the sha256 digest of the whole DER-encoded certificate
 		fingerprint := sha256.Sum256(rawCerts[0])
 		if bytes.Equal(fingerprint[:], trustedCertFingerprint) {
 			return nil
 		}
 		return x509.CertificateInvalidError{
-			nil, x509.NotAuthorizedToSign, "Failed to validate pinned TLS certificate"}
+			nil, x509.NotAuthorizedToSign, "Failed to verify TLS certificate"}
 	}
 }
