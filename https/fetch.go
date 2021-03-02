@@ -22,7 +22,6 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/http"
-	"strings"
 	"time"
 )
 
@@ -66,25 +65,14 @@ func Fetch(req Request) (*Response, error) {
 	var redirectURL string
 	client := &http.Client{
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				// Too many redirects, abort.
-				return http.ErrUseLastResponse
-			}
-			lastRes := req.Response
-			if lastRes.StatusCode == http.StatusPermanentRedirect ||
-				lastRes.StatusCode == http.StatusMovedPermanently {
-				// Save the permanent redirect URL.
-				redirectURL = lastRes.Header.Get("Location")
-				if !strings.HasPrefix(redirectURL, "https://") {
-					return http.ErrUseLastResponse
-				}
-			}
-			return nil
+			// Do not follow redirects automatically, save the Location header.
+			redirectURL = req.Response.Header.Get("Location")
+			return http.ErrUseLastResponse
 		},
 		Timeout: 30 * time.Second,
 	}
 
-	if req.TrustedCertFingerprint != nil && len(req.TrustedCertFingerprint) != 0 {
+	if req.TrustedCertFingerprint != nil && len(req.TrustedCertFingerprint) > 0 {
 		client.Transport = &http.Transport{
 			// Perform custom server certificate verification by pinning the
 			// trusted certificate fingerprint.

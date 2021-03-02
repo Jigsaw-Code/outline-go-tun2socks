@@ -32,10 +32,8 @@ import (
 	"time"
 )
 
-const nonHTTPSRedirectURL = "ssconf://URL"
+const redirectURL = "https://redirect.url"
 
-// Redirect URL is populated after we get the server listen port.
-var redirectURL string
 var okResponseData = []byte("OK")
 var notFoundResponseData = []byte("Not Found")
 
@@ -53,7 +51,6 @@ func TestFetch(t *testing.T) {
 		t.Fatalf("Failed to start server: %v", err)
 	}
 	serverAddr := listener.Addr()
-	redirectURL = fmt.Sprintf("https://%s/200", serverAddr)
 	go server.ServeTLS(listener, "", "")
 	defer server.Close()
 
@@ -93,55 +90,18 @@ func TestFetch(t *testing.T) {
 		}
 	})
 
-	t.Run("PermanentRedirect", func(t *testing.T) {
+	t.Run("Redirect", func(t *testing.T) {
 		req := Request{
 			fmt.Sprintf("https://%s/301", serverAddr), "GET", certFingerprint}
 		res, err := Fetch(req)
 		if err != nil {
 			t.Fatalf("Unexpected error: %v", err)
 		}
-		if res.HTTPStatusCode != 200 {
-			t.Errorf("Expected 200 HTTP status code, got %d", res.HTTPStatusCode)
+		if res.HTTPStatusCode != 301 {
+			t.Errorf("Expected 301 HTTP status code, got %d", res.HTTPStatusCode)
 		}
 		if res.RedirectURL != redirectURL {
 			t.Errorf("Expected redirect URL %s, got %s", redirectURL, res.RedirectURL)
-		}
-		if !bytes.Equal(res.Data, okResponseData) {
-			t.Errorf("Data doesn't match. Want %v, got %v", okResponseData, res.Data)
-		}
-	})
-
-	t.Run("TemporaryRedirect", func(t *testing.T) {
-		req := Request{
-			fmt.Sprintf("https://%s/307", serverAddr), "GET", certFingerprint}
-		res, err := Fetch(req)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		if res.HTTPStatusCode != 200 {
-			t.Errorf("Expected 200 HTTP status code, got %d", res.HTTPStatusCode)
-		}
-		if res.RedirectURL != "" {
-			t.Errorf("Temporary redirect should not set redirect URL: %s", res.RedirectURL)
-		}
-		if !bytes.Equal(res.Data, okResponseData) {
-			t.Errorf("Data doesn't match. Want %v, got %v", okResponseData, res.Data)
-		}
-	})
-
-	t.Run("NonHTTPSRedirectURL", func(t *testing.T) {
-		req := Request{
-			fmt.Sprintf("https://%s/308", serverAddr), "GET", certFingerprint}
-		res, err := Fetch(req)
-		if err != nil {
-			t.Fatalf("Unexpected error: %v", err)
-		}
-		if res.HTTPStatusCode != 308 {
-			t.Errorf("Expected 308 HTTP status code, got %d", res.HTTPStatusCode)
-		}
-		if res.RedirectURL != nonHTTPSRedirectURL {
-			t.Errorf("Non-HTTPS redirect URL mismatch. Want %s, got %s",
-				nonHTTPSRedirectURL, res.RedirectURL)
 		}
 	})
 
@@ -210,12 +170,6 @@ func (h httpHandler) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	} else if req.URL.Path == "/301" {
 		w.Header().Add("Location", redirectURL)
 		h.sendResponse(w, 301, []byte{})
-	} else if req.URL.Path == "/307" {
-		w.Header().Add("Location", redirectURL)
-		h.sendResponse(w, 307, []byte{})
-	} else if req.URL.Path == "/308" {
-		w.Header().Add("Location", nonHTTPSRedirectURL)
-		h.sendResponse(w, 308, []byte{})
 	} else {
 		h.sendResponse(w, 404, notFoundResponseData)
 	}
