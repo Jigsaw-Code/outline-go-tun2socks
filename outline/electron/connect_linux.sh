@@ -4,15 +4,12 @@
 # Instructions:
 # 1. Install the Outline client for Linux, connect to a server, and disconnect.
 #    This installs the outline controller service.
-# 2. $ git update-index --assume-unchanged connect_linux.sh
-#    This helps to avoid accidentally checking in your proxy credentials.
-# 3. Edit this script to add the IP, port, and password for your test proxy.
-# 4. $ ./connect_linux.sh
-# 5. Ctrl+C to stop proxying
+# 2. $ ./connect_linux.sh <proxy IP or hostname> <proxy port> <password>
+# 3. Ctrl+C to stop proxying
 
-readonly PROXY_IP="..."
-readonly PROXY_PORT="..."
-readonly PROXY_PASSWORD="..."
+readonly PROXY_IP="$1"
+readonly PROXY_PORT="$2"
+readonly PROXY_PASSWORD="$3"
 
 go build -v .
 
