@@ -299,10 +299,8 @@ func (t *transport) doQuery(q []byte) (response []byte, server *net.TCPAddr, qer
 		}
 
 		response = tryServfail(q)
-	}
-
-	if server != nil {
-		// Record a working IP address for this server
+	} else if server != nil {
+		// Record a working IP address for this server iff qerr is nil
 		t.ips.Get(hostname).Confirm(server.IP)
 	}
 	return

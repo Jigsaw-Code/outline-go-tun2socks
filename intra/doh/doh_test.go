@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
+	"golang.org/x/net/dns/dnsmessage"
 	"io"
 	"io/ioutil"
 	"net"
@@ -26,8 +27,6 @@ import (
 	"net/url"
 	"reflect"
 	"testing"
-
-	"golang.org/x/net/dns/dnsmessage"
 )
 
 var testURL = "https://dns.google/dns-query"
@@ -403,6 +402,50 @@ func TestSendFailed(t *testing.T) {
 		t.Errorf("Wrong error status: %d", qerr.status)
 	} else if !errors.Is(qerr, rt.err) {
 		t.Errorf("Underlying error is not retained")
+	}
+}
+
+// Test if DoH resolver IPs are confirmed and disconfirmed
+// when queries suceeded and fail, respectively.
+func TestDohIPConfirmDisconfirm(t *testing.T) {
+	u, _ := url.Parse(testURL)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil)
+	transport := doh.(*transport)
+	hostname := u.Hostname()
+	ipmap := transport.ips.Get(hostname)
+
+	// send a valid request to first have confirmed-ip set
+	res, _ := doh.Query(simpleQueryBytes)
+	mustUnpack(res)
+	ip1 := ipmap.Confirmed()
+
+	if ip1 == nil {
+		t.Errorf("IP not confirmed despite valid query to %s", u)
+	}
+
+	// simulate http-fail with doh server-ip set to previously confirmed-ip
+	rt := makeTestRoundTripper()
+	transport.client.Transport = rt
+	go func() {
+		req := <-rt.req
+		trace := httptrace.ContextClientTrace(req.Context())
+		trace.GotConn(httptrace.GotConnInfo{
+			Conn: &fakeConn{
+				remoteAddr: &net.TCPAddr{
+					IP:   ip1, // confirmed-ip from before
+					Port: 443,
+				}}})
+		rt.resp <- &http.Response{
+			StatusCode: 509, // some non-2xx status
+			Body:       nil,
+			Request:    &http.Request{URL: u},
+		}
+	}()
+	doh.Query(simpleQueryBytes)
+	ip2 := ipmap.Confirmed()
+
+	if ip2 != nil {
+		t.Errorf("IP confirmed (%s) despite err", ip2)
 	}
 }
 
@@ -845,4 +888,3 @@ func TestServfail(t *testing.T) {
 		t.Errorf("Wrong question: %v", servfail.Questions[0])
 	}
 }
-
