@@ -2,6 +2,40 @@
 
 Go package for building [go-tun2socks](https://github.com/eycorsican/go-tun2socks)-based clients for [Outline](https://getoutline.org) and [Intra](https://getintra.org) (now with support for [Choir](https://github.com/Jigsaw-Code/choir) metrics).  For macOS, iOS, and Android, the output is a library; for Linux and Windows it is a command-line executable.
 
+## Usage
+
+```sh
+Usage of tun2socks:
+  -checkConnectivity
+    	Check the proxy TCP and UDP connectivity and exit.
+  -dnsFallback
+    	Enable DNS fallback over TCP (overrides the UDP handler).
+  -logLevel string
+    	Logging level: debug|info|warn|error|none (default "info")
+  -proxyCipher string
+    	Shadowsocks proxy encryption cipher (default "chacha20-ietf-poly1305")
+  -proxyHost string
+    	Shadowsocks proxy hostname or IP address
+  -proxyPassword string
+    	Shadowsocks proxy password
+  -proxyPort int
+    	Shadowsocks proxy port number
+  -tunAddr string
+    	TUN interface IP address (default "10.0.85.2")
+  -tunDNS string
+    	Comma-separated list of DNS resolvers for the TUN interface (Windows only) (default "1.1.1.1,9.9.9.9,208.67.222.222")
+  -tunGw string
+    	TUN interface gateway (default "10.0.85.1")
+  -tunMask string
+    	TUN interface network mask; prefixlen for IPv6 (default "255.255.255.0")
+  -tunName string
+    	TUN interface name (default "tun0")
+  -version
+    	Print the version and exit.
+
+```
+
+
 ## Prerequisites
 
 - macOS host (iOS, macOS)
