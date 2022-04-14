@@ -14,12 +14,6 @@ Go package for building [go-tun2socks](https://github.com/eycorsican/go-tun2sock
 - Docker (Windows, Linux)
 - Other common utilities (e.g.: git)
 
-## macOS Framework
-
-As of Go 1.14, gomobile does not support building frameworks for macOS. We have patched gomobile to enable building a framework for macOS by replacing the default iOS simulator build.
-
-Until we upstream the change, the (Darwin) binary to enable this behavior is located at `tools/gomobile` and is used by the `build_macos.sh` build script.
-
 
 ## Linux & Windows
 
@@ -27,6 +21,7 @@ We build binaries for Linux and Windows from source without any custom integrati
 
 ## Build
 ```bash
-go get -d ./...
+export PATH=$PATH:"$(go env GOPATH)/bin"
+go mod tidy
 ./build_[ios|android|macos|windows].sh
 ```
