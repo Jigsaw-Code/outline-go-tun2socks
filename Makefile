@@ -68,4 +68,7 @@ go.mod: tools.go
 	touch go.mod
 
 clean:
-	rm -rf $(BUILDDIR) $(GOBIN)
+	rm -rf $(BUILDDIR)
+
+clean-all: clean
+	rm -rf $(GOBIN)
