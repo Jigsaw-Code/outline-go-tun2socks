@@ -20,8 +20,25 @@ Go package for building [go-tun2socks](https://github.com/eycorsican/go-tun2sock
 We build binaries for Linux and Windows from source without any custom integrations. `xgo` and Docker are required to support cross-compilation.
 
 ## Build
+For iOS and macOS:
+```
+make clean && make apple
+```
+This will create `build/apple/Tun2socks.xcframework`.
+
+For Linux:
+```
+make clean && make linux
+```
+This will create `build/linux/tun2socks`.
+
+For Windows:
+```
+make clean && make windows
+```
+This will create `build/windows/tun2socks.exe`.
+
+For Android:
 ```bash
-export PATH=$PATH:"$(go env GOPATH)/bin"
-go mod tidy
-./build_[ios|android|macos|windows].sh
+./build_android.sh
 ```
