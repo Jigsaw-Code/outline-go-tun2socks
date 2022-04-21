@@ -31,6 +31,11 @@ make clean && make android
 ```
 This will create `build/android/{tun2socks.aar,tun2socks-sources.jar}`
 
+If needed, you can extract the jni files into `build/android/jni` with:
+```bash
+unzip build/android/tun2socks.aar 'jni/*' -d build/android
+```
+
 ## Apple (iOS and macOS)
 
 ### Set up
