@@ -6,11 +6,11 @@ require (
 	github.com/Jigsaw-Code/choir v1.0.1
 	github.com/Jigsaw-Code/getsni v0.0.0-20190807203514-efe2dbf35d1f
 	github.com/Jigsaw-Code/outline-ss-server v1.3.5
+	github.com/crazy-max/xgo v0.14.0
 	github.com/eycorsican/go-tun2socks v1.16.11
 	golang.org/x/mobile v0.0.0-20220407111146-e579adbbc4a2
 	golang.org/x/net v0.0.0-20220412020605-290c469a71a5
 	golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
-	src.techknowlogick.com/xgo v1.4.1-0.20220413212431-091a0a22b814
 )
 
 require (

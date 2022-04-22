@@ -61,7 +61,7 @@ $(GOMOBILE): go.mod
 	$(GOMOBILE) init
 
 $(XGO): go.mod
-	GOBIN=$(GOBIN) go install src.techknowlogick.com/xgo
+	GOBIN=$(GOBIN) go install github.com/crazy-max/xgo
 
 go.mod: tools.go
 	go mod tidy
