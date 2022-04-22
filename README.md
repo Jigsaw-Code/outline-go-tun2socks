@@ -56,8 +56,9 @@ We build binaries for Linux and Windows from source without any custom integrati
 
 ### Set up
 
-- [Docker](https://docs.docker.com/get-docker/) (for XGO)
-- [xgo](https://github.com/techknowlogick/xgo) (installed as needed by `make`)
+- [Docker](https://docs.docker.com/get-docker/) (for xgo)
+- [xgo](https://github.com/crazy-max/xgo) (installed as needed by `make`)
+- [ghcr.io/crazy-max/xgo Docker image](https://github.com/crazy-max/xgo/pkgs/container/xgo). This is pulled automatically by xgo and takes ~6.8 GB of disk space.
 
 ## Build
 
