@@ -5,28 +5,81 @@ Go package for building [go-tun2socks](https://github.com/eycorsican/go-tun2sock
 ## Prerequisites
 
 - macOS host (iOS, macOS)
-- Xcode (iOS, macOS)
 - make
-- Go >= 1.14
+- Go >= 1.18
 - A C compiler (e.g.: clang, gcc)
-- [gomobile](https://github.com/golang/go/wiki/Mobile) (iOS, macOS, Android)
-- [xgo](https://github.com/techknowlogick/xgo) (Windows, Linux)
-- Docker (Windows, Linux)
-- Other common utilities (e.g.: git)
 
-## macOS Framework
+## Android
 
-As of Go 1.14, gomobile does not support building frameworks for macOS. We have patched gomobile to enable building a framework for macOS by replacing the default iOS simulator build.
+### Set up
 
-Until we upstream the change, the (Darwin) binary to enable this behavior is located at `tools/gomobile` and is used by the `build_macos.sh` build script.
+- [sdkmanager](https://developer.android.com/studio/command-line/sdkmanager)
+  1. Download the command line tools from https://developer.android.com/studio.
+  1. Unzip the pacakge as `~/Android/Sdk/cmdline-tools/latest/`. Make sure `sdkmanager` is located at `~/Android/Sdk/cmdline-tools/latest/bin/sdkmanager`
+- Android NDK 23
+  1. Install the NDK with `~/Android/Sdk/cmdline-tools/latest/bin/sdkmanager "platforms;android-30" "ndk;23.1.7779620"` (platform from [outline-client](https://github.com/Jigsaw-Code/outline-client#building-the-android-app), exact NDK 23 version obtained from `sdkmanager --list`)
+  1. Set up the environment variables:
+     ```
+     export ANDROID_NDK_HOME=~/Android/Sdk/ndk/23.1.7779620 ANDROID_HOME=~/Android/Sdk
+     ```
+- [gomobile](https://pkg.go.dev/golang.org/x/mobile/cmd/gobind) (installed as needed by `make`)
+
+### Build
+
+```bash
+make clean && make android
+```
+This will create `build/android/{tun2socks.aar,tun2socks-sources.jar}`
+
+If needed, you can extract the jni files into `build/android/jni` with:
+```bash
+unzip build/android/tun2socks.aar 'jni/*' -d build/android
+```
+
+## Apple (iOS and macOS)
+
+### Set up
+
+- Xcode
+- [gomobile](https://pkg.go.dev/golang.org/x/mobile/cmd/gobind) (installed as needed by `make`)
 
 
-## Linux & Windows
+### Build
+```
+make clean && make apple
+```
+This will create `build/apple/Tun2socks.xcframework`.
+
+## Linux and Windows
 
 We build binaries for Linux and Windows from source without any custom integrations. `xgo` and Docker are required to support cross-compilation.
 
+### Set up
+
+- [Docker](https://docs.docker.com/get-docker/) (for XGO)
+- [xgo](https://github.com/techknowlogick/xgo) (installed as needed by `make`)
+
 ## Build
-```bash
-go get -d ./...
-./build_[ios|android|macos|windows].sh
+
+For Linux:
 ```
+make clean && make linux
+```
+This will create `build/linux/tun2socks`.
+
+For Windows:
+```
+make clean && make windows
+```
+This will create `build/windows/tun2socks.exe`.
+
+## Intra (Android)
+
+Same set up as for the Outline Android library.
+
+Build with:
+
+```bash
+make clean && make intra
+```
+This will create `build/intra/{tun2socks.aar,tun2socks-sources.jar}`
