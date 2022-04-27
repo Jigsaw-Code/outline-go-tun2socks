@@ -6,7 +6,7 @@ IMPORT_PATH=github.com/Jigsaw-Code/outline-go-tun2socks
 
 .PHONY: android apple linux windows intra clean clean-all
 
-all: android-outline android-intra linux apple windows
+all: intra android linux apple windows
 
 # Don't strip Android debug symbols so we can upload them to crash reporting tools.
 ANDROID_BUILD_CMD=$(GOMOBILE) bind -a -ldflags '-w' -target=android -tags android -work
@@ -28,8 +28,9 @@ $(BUILDDIR)/android/tun2socks.aar: $(GOMOBILE)
 apple: $(BUILDDIR)/apple/Tun2socks.xcframework
 
 $(BUILDDIR)/apple/Tun2socks.xcframework: $(GOMOBILE)
+  # MACOSX_DEPLOYMENT_TARGET and -iosversion should match what outline-client supports.
   # TODO(fortuna): -s strips symbols and is obsolete. Why are we using it?
-	$(GOMOBILE) bind -a -ldflags '-s -w' -bundleid org.outline.tun2socks -target=ios,iossimulator,macos,maccatalyst -o $@ $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks
+	export MACOSX_DEPLOYMENT_TARGET=10.14; $(GOMOBILE) bind -iosversion=9.0 -target=ios,iossimulator,macos -o $@ -ldflags '-s -w' -bundleid org.outline.tun2socks $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks
 
 
 XGO=$(GOBIN)/xgo
@@ -57,11 +58,11 @@ $(WINDOWS_BUILDDIR)/tun2socks.exe: $(XGO)
 
 
 $(GOMOBILE): go.mod
-	GOBIN=$(GOBIN) go install golang.org/x/mobile/cmd/gomobile
+	env GOBIN=$(GOBIN) go install golang.org/x/mobile/cmd/gomobile
 	$(GOMOBILE) init
 
 $(XGO): go.mod
-	GOBIN=$(GOBIN) go install github.com/crazy-max/xgo
+	env GOBIN=$(GOBIN) go install github.com/crazy-max/xgo
 
 go.mod: tools.go
 	go mod tidy
@@ -69,6 +70,7 @@ go.mod: tools.go
 
 clean:
 	rm -rf $(BUILDDIR)
+	go clean
 
 clean-all: clean
 	rm -rf $(GOBIN)
