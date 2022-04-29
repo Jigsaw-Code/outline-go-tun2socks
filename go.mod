@@ -10,5 +10,5 @@ require (
 	github.com/songgao/water v0.0.0-20200317203138-2b4b6d7c09d8 // indirect
 	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f
 	golang.org/x/time v0.0.0-20200630173020-3af7569d3a1e // indirect
-	gvisor.dev/gvisor v0.0.0-20220413063828-6b7abe89eebe
+	gvisor.dev/gvisor v0.0.0-20220428195019-fe4d0a2e4de9
 )
