@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/core"
 	"gvisor.dev/gvisor/pkg/tcpip"
@@ -15,11 +16,19 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 )
 
+func udpAddr(addr net.Addr) (*net.UDPAddr, error) {
+	if udp, ok := addr.(*net.UDPAddr); ok {
+		return udp, nil
+	}
+	return net.ResolveUDPAddr(addr.Network(), addr.String())
+}
+
 type nat struct {
 	sync.RWMutex
-	m       map[tcpip.FullAddress]reverseUDPConn
-	handler core.UDPConnHandler
-	stack   *stack.Stack
+	timeout  time.Duration
+	m        map[tcpip.FullAddress]net.PacketConn
+	listener core.UDPListener
+	stack    *stack.Stack
 }
 
 type reverseUDPConn struct {
@@ -28,15 +37,7 @@ type reverseUDPConn struct {
 	n         *nat
 }
 
-func (c reverseUDPConn) LocalAddr() *net.UDPAddr {
-	return &net.UDPAddr{IP: net.IP(c.localAddr.Addr), Port: int(c.localAddr.Port)}
-}
-
-func (c reverseUDPConn) ReceiveTo(data []byte, addr *net.UDPAddr) error {
-	return errors.New("Why does this method even exist?")
-}
-
-func (c reverseUDPConn) WriteFrom(data []byte, addr *net.UDPAddr) (int, error) {
+func (c reverseUDPConn) WriteFrom(data []byte, addr *net.UDPAddr) error {
 	// Based on sendUDP() in https://github.com/google/gvisor/blob/master/pkg/tcpip/transport/udp/endpoint.go#
 
 	srcIP := tcpip.Address(string(addr.IP))
@@ -47,7 +48,7 @@ func (c reverseUDPConn) WriteFrom(data []byte, addr *net.UDPAddr) (int, error) {
 	}
 	route, err := c.stack.FindRoute(1, srcIP, c.localAddr.Addr, protocol, false)
 	if err != nil {
-		return 0, errors.New(err.String())
+		return errors.New(err.String())
 	}
 
 	// WritePacket takes ownership of pkt.
@@ -74,31 +75,53 @@ func (c reverseUDPConn) WriteFrom(data []byte, addr *net.UDPAddr) (int, error) {
 	}
 	if err := route.WritePacket(headerParams, pkt); err != nil {
 		log.Printf("UDP download write error: %v", err)
-		return 0, errors.New(err.String())
+		return errors.New(err.String())
 	}
-	return len(data), nil
+	return nil
 }
 
 func (c reverseUDPConn) Close() error {
 	c.n.Lock()
 	delete(c.n.m, c.localAddr)
 	c.n.Unlock()
-	log.Printf("Closing UDP socket for %s", c.LocalAddr().String())
+	log.Printf("Closing UDP socket for %v", c.localAddr)
 	return nil
 }
 
-func (n *nat) getConn(localAddr tcpip.FullAddress, netstack *stack.Stack) (core.UDPConn, error) {
+func (n *nat) getConn(localAddr tcpip.FullAddress, netstack *stack.Stack) (net.PacketConn, error) {
 	n.Lock()
 	defer n.Unlock()
 	conn, ok := n.m[localAddr]
 	if !ok {
-		conn = reverseUDPConn{localAddr, netstack, n}
-		n.m[localAddr] = conn
-		if err := n.handler.Connect(conn, nil); err != nil {
-			return nil, fmt.Errorf("Error registering connection: %v", err)
+		reverse := reverseUDPConn{localAddr, n.stack, n}
+		var err error
+		conn, err = n.listener.ListenUDP(reverse)
+		if err != nil {
+			return nil, fmt.Errorf("failed to listen in NAT: %w", err)
 		}
+		n.m[localAddr] = conn
+		go copyDownstream(reverse, conn)
 	}
 	return conn, nil
+}
+
+func copyDownstream(dst reverseUDPConn, src net.PacketConn) {
+	buf := make([]byte, 2048) // TODO: Use a pool.
+	for {
+		n, addr, err := src.ReadFrom(buf)
+		if err != nil && n == 0 {
+			break
+		}
+		udp, err := udpAddr(addr)
+		if err != nil {
+			break
+		}
+		if err := dst.WriteFrom(buf[:n], udp); err != nil {
+			break
+		}
+	}
+	src.Close()
+	dst.Close()
 }
 
 func (n *nat) HandleOutboundPacket(id stack.TransportEndpointID, pkt *stack.PacketBuffer) bool {
@@ -118,13 +141,14 @@ func (n *nat) HandleOutboundPacket(id stack.TransportEndpointID, pkt *stack.Pack
 	// AsView() can trigger reallocation if there are multiple segments in the range.
 	// TODO: Check if this ever happens, and if so, make the Shadowsocks-UDP writer accept
 	// multiple segments to concatenate before encryption.
-	if err := n.handler.ReceiveTo(conn, pkt.Data().AsRange().AsView(), &dstAddr); err != nil {
+	if _, err := conn.WriteTo(pkt.Data().AsRange().AsView(), &dstAddr); err != nil {
 		log.Printf("UDP upload write error: %v", err)
 		return false
 	}
+	conn.SetDeadline(time.Now().Add(n.timeout))
 	return true
 }
 
-func MakeUDPBridge(netstack *stack.Stack, handler core.UDPConnHandler) *nat {
-	return &nat{stack: netstack, m: make(map[tcpip.FullAddress]reverseUDPConn), handler: handler}
+func MakeUDPBridge(netstack *stack.Stack, listener core.UDPListener, timeout time.Duration) *nat {
+	return &nat{stack: netstack, timeout: timeout, m: make(map[tcpip.FullAddress]net.PacketConn), listener: listener}
 }

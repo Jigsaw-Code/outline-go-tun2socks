@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 	"sync"
-	"time"
 
 	"gvisor.dev/gvisor/pkg/tcpip"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
@@ -23,10 +22,6 @@ type bridgeConn struct {
 	closedMu    sync.Mutex
 	readClosed  bool
 	writeClosed bool
-}
-
-func (c *bridgeConn) Read(b []byte) (int, error) {
-	panic("Unimplemented") // io.Copy always prefers WriteTo
 }
 
 func (c *bridgeConn) WriteTo(w io.Writer) (n int64, err error) {
@@ -72,26 +67,6 @@ func (c *bridgeConn) Close() error {
 	return nil
 }
 
-func (c *bridgeConn) LocalAddr() net.Addr {
-	panic("not implemented") // TODO: Implement
-}
-
-func (c *bridgeConn) RemoteAddr() net.Addr {
-	panic("not implemented") // TODO: Implement
-}
-
-func (c *bridgeConn) SetDeadline(t time.Time) error {
-	panic("not implemented") // TODO: Implement
-}
-
-func (c *bridgeConn) SetReadDeadline(t time.Time) error {
-	panic("not implemented") // TODO: Implement
-}
-
-func (c *bridgeConn) SetWriteDeadline(t time.Time) error {
-	panic("not implemented") // TODO: Implement
-}
-
 func (c *bridgeConn) CloseRead() error {
 	err := c.endpoint.Shutdown(tcpip.ShutdownRead)
 	c.closedMu.Lock()
@@ -120,7 +95,7 @@ func (c *bridgeConn) CloseWrite() error {
 	return nil
 }
 
-func tcpbridge(handler core.TCPConnHandler, r *tcp.ForwarderRequest) {
+func tcpbridge(dialer core.TCPDialer, r *tcp.ForwarderRequest) {
 	id := r.ID()
 	dstAddr := net.TCPAddr{
 		IP:   []byte(id.LocalAddress),
@@ -133,22 +108,25 @@ func tcpbridge(handler core.TCPConnHandler, r *tcp.ForwarderRequest) {
 		return
 	}
 
-	conn := bridgeConn{endpoint: endpoint, q: &q}
-	err := handler.Handle(&conn, &dstAddr)
+	toClient := bridgeConn{endpoint: endpoint, q: &q}
+	toDest, err := dialer.DialTCP(&dstAddr)
 	if err != nil {
 		log.Printf("Proxying failed: %v", err)
+		r.Complete(true)
+		return
 	}
-	sendRST := false
-	r.Complete(sendRST)
+	r.Complete(false)
+	go toClient.WriteTo(toDest)
+	go io.Copy(&toClient, toDest)
 }
 
-func tcphandler(handler core.TCPConnHandler) func(*tcp.ForwarderRequest) {
+func tcphandler(dialer core.TCPDialer) func(*tcp.ForwarderRequest) {
 	// The returned function will be run in a fresh goroutine for each incoming socket.
 	return func(r *tcp.ForwarderRequest) {
-		tcpbridge(handler, r)
+		tcpbridge(dialer, r)
 	}
 }
 
-func MakeTCPBridge(s *stack.Stack, handler core.TCPConnHandler) *tcp.Forwarder {
-	return tcp.NewForwarder(s, 0, 10, tcphandler(handler))
+func MakeTCPBridge(s *stack.Stack, dialer core.TCPDialer) *tcp.Forwarder {
+	return tcp.NewForwarder(s, 0, 10, tcphandler(dialer))
 }

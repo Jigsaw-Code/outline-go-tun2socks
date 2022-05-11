@@ -54,8 +54,8 @@ type Tunnel interface {
 
 type intratunnel struct {
 	tunnel.Tunnel
-	tcp TCPHandler
-	udp UDPHandler
+	tcp TCPDialer
+	udp UDPConnListener
 	dns doh.Transport
 }
 
@@ -74,7 +74,10 @@ func NewTunnel(fakedns string, dohdns doh.Transport, endpoint stack.LinkEndpoint
 	if err != nil {
 		return nil, err
 	}
-	base, err := tunnel.MakeTunnel(endpoint, tcp, udp)
+	// RFC 5382 REQ-5 requires a timeout no shorter than 2 hours and 4 minutes.
+	timeout, _ := time.ParseDuration("2h4m")
+
+	base, err := tunnel.MakeTunnel(endpoint, tcp, udp, timeout)
 	if err != nil {
 		return nil, err
 	}
@@ -88,20 +91,17 @@ func NewTunnel(fakedns string, dohdns doh.Transport, endpoint stack.LinkEndpoint
 }
 
 // Registers Intra's custom UDP and TCP connection handlers to the tun2socks core.
-func getConnectionHandlers(fakedns string, dialer *net.Dialer, config *net.ListenConfig, listener Listener) (TCPHandler, UDPHandler, error) {
-	// RFC 5382 REQ-5 requires a timeout no shorter than 2 hours and 4 minutes.
-	timeout, _ := time.ParseDuration("2h4m")
-
+func getConnectionHandlers(fakedns string, dialer *net.Dialer, config *net.ListenConfig, listener Listener) (TCPDialer, UDPConnListener, error) {
 	udpfakedns, err := net.ResolveUDPAddr("udp", fakedns)
 	if err != nil {
 		return nil, nil, err
 	}
-	udp := NewUDPHandler(*udpfakedns, timeout, config, listener)
+	udp := NewUDPConnListener(*udpfakedns, config, listener)
 	tcpfakedns, err := net.ResolveTCPAddr("tcp", fakedns)
 	if err != nil {
 		return nil, nil, err
 	}
-	tcp := NewTCPHandler(*tcpfakedns, dialer, listener)
+	tcp := NewTCPDialer(*tcpfakedns, dialer, listener)
 	return tcp, udp, nil
 }
 

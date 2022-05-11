@@ -17,6 +17,7 @@ package tunnel
 import (
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/core"
 	"gvisor.dev/gvisor/pkg/tcpip"
@@ -36,7 +37,7 @@ type Tunnel interface {
 	Disconnect()
 }
 
-func MakeTunnel(link stack.LinkEndpoint, tcpHandler core.TCPConnHandler, udpHandler core.UDPConnHandler) (*tunnel, error) {
+func MakeTunnel(link stack.LinkEndpoint, dialer core.TCPDialer, listener core.UDPListener, timeout time.Duration) (*tunnel, error) {
 	const nicID = 1
 	netstack := stack.New(stack.Options{
 		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol, ipv6.NewProtocol},
@@ -70,9 +71,9 @@ func MakeTunnel(link stack.LinkEndpoint, tcpHandler core.TCPConnHandler, udpHand
 		return nil, errors.New(neterr.String())
 	}
 
-	tcpBridge := MakeTCPBridge(netstack, tcpHandler)
+	tcpBridge := MakeTCPBridge(netstack, dialer)
 	netstack.SetTransportProtocolHandler(tcp.ProtocolNumber, tcpBridge.HandlePacket)
-	udpBridge := MakeUDPBridge(netstack, udpHandler)
+	udpBridge := MakeUDPBridge(netstack, listener, timeout)
 	netstack.SetTransportProtocolHandler(udp.ProtocolNumber, udpBridge.HandleOutboundPacket)
 
 	if neterr := netstack.EnableNIC(nicID); neterr != nil {

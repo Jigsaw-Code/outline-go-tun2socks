@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"encoding/binary"
 	"errors"
-	"golang.org/x/net/dns/dnsmessage"
 	"io"
 	"io/ioutil"
 	"net"
@@ -27,6 +26,8 @@ import (
 	"net/url"
 	"reflect"
 	"testing"
+
+	"golang.org/x/net/dns/dnsmessage"
 )
 
 var testURL = "https://dns.google/dns-query"
@@ -518,34 +519,6 @@ func TestListener(t *testing.T) {
 	}
 }
 
-type socket struct {
-	r io.ReadCloser
-	w io.WriteCloser
-}
-
-func (c *socket) Read(b []byte) (int, error) {
-	return c.r.Read(b)
-}
-
-func (c *socket) Write(b []byte) (int, error) {
-	return c.w.Write(b)
-}
-
-func (c *socket) Close() error {
-	e1 := c.r.Close()
-	e2 := c.w.Close()
-	if e1 != nil {
-		return e1
-	}
-	return e2
-}
-
-func makePair() (io.ReadWriteCloser, io.ReadWriteCloser) {
-	r1, w1 := io.Pipe()
-	r2, w2 := io.Pipe()
-	return &socket{r1, w2}, &socket{r2, w1}
-}
-
 type fakeTransport struct {
 	Transport
 	query    chan []byte
@@ -581,10 +554,9 @@ func newFakeTransport() *fakeTransport {
 // Test a successful query over TCP
 func TestAccept(t *testing.T) {
 	doh := newFakeTransport()
-	client, server := makePair()
 
 	// Start the forwarder running.
-	go Accept(doh, server)
+	client := Accept(doh)
 
 	lbuf := make([]byte, 2)
 	// Send Query
@@ -625,7 +597,7 @@ func TestAccept(t *testing.T) {
 	}
 	rlen := binary.BigEndian.Uint16(lbuf)
 	resp := make([]byte, int(rlen))
-	n, err = client.Read(resp)
+	_, err = client.Read(resp)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -633,17 +605,16 @@ func TestAccept(t *testing.T) {
 		t.Error("Response mismatch")
 	}
 
-	client.Close()
+	client.CloseWrite()
 }
 
 // Sends a TCP query that results in failure.  When a query fails,
 // Accept should close the TCP socket.
 func TestAcceptFail(t *testing.T) {
 	doh := newFakeTransport()
-	client, server := makePair()
 
 	// Start the forwarder running.
-	go Accept(doh, server)
+	client := Accept(doh)
 
 	lbuf := make([]byte, 2)
 	// Send Query
@@ -672,10 +643,9 @@ func TestAcceptFail(t *testing.T) {
 // This tests for crashes when a response cannot be delivered.
 func TestAcceptClose(t *testing.T) {
 	doh := newFakeTransport()
-	client, server := makePair()
 
 	// Start the forwarder running.
-	go Accept(doh, server)
+	client := Accept(doh)
 
 	lbuf := make([]byte, 2)
 	// Send Query
@@ -691,7 +661,7 @@ func TestAcceptClose(t *testing.T) {
 	}
 
 	// Close the TCP connection
-	client.Close()
+	client.CloseWrite()
 
 	// Send fake response too late.
 	responseData := []byte{1, 2, 8, 9, 10}
@@ -702,10 +672,9 @@ func TestAcceptClose(t *testing.T) {
 // maximum message size for DNS over TCP (65535).
 func TestAcceptOversize(t *testing.T) {
 	doh := newFakeTransport()
-	client, server := makePair()
 
 	// Start the forwarder running.
-	go Accept(doh, server)
+	client := Accept(doh)
 
 	lbuf := make([]byte, 2)
 	// Send Query

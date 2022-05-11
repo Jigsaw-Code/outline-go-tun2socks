@@ -28,18 +28,19 @@ import (
 	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/split"
 
 	onet "github.com/Jigsaw-Code/outline-ss-server/net"
+	"github.com/Jigsaw-Code/outline-ss-server/service/metrics"
 )
 
-// TCPHandler is a core TCP handler that also supports DOH and splitting control.
-type TCPHandler interface {
-	core.TCPConnHandler
+// TCPDialer is a core TCP handler that also supports DOH and splitting control.
+type TCPDialer interface {
+	core.TCPDialer
 	SetDNS(doh.Transport)
 	SetAlwaysSplitHTTPS(bool)
 	EnableSNIReporter(file io.ReadWriter, suffix, country string) error
 }
 
-type tcpHandler struct {
-	TCPHandler
+type tcpDialer struct {
+	TCPDialer
 	fakedns          net.TCPAddr
 	dns              doh.Atomic
 	alwaysSplitHTTPS bool
@@ -64,12 +65,12 @@ type TCPListener interface {
 	OnTCPSocketClosed(*TCPSocketSummary)
 }
 
-// NewTCPHandler returns a TCP forwarder with Intra-style behavior.
+// NewTCPDialer returns a TCP dialer with Intra-style behavior.
 // Connections to `fakedns` are redirected to DOH.
 // All other traffic is forwarded using `dialer`.
 // `listener` is provided with a summary of each socket when it is closed.
-func NewTCPHandler(fakedns net.TCPAddr, dialer *net.Dialer, listener TCPListener) TCPHandler {
-	return &tcpHandler{
+func NewTCPDialer(fakedns net.TCPAddr, dialer *net.Dialer, listener TCPListener) TCPDialer {
+	return &tcpDialer{
 		fakedns:  fakedns,
 		dialer:   dialer,
 		listener: listener,
@@ -77,21 +78,21 @@ func NewTCPHandler(fakedns net.TCPAddr, dialer *net.Dialer, listener TCPListener
 }
 
 // TODO: Propagate TCP RST using local.Abort(), on appropriate errors.
-func (h *tcpHandler) handleUpload(local onet.DuplexConn, remote split.DuplexConn, upload chan int64) {
+func (h *tcpDialer) handleUpload(local onet.DuplexConn, remote split.DuplexConn, upload chan int64) {
 	bytes, _ := remote.ReadFrom(local)
 	local.CloseRead()
 	remote.CloseWrite()
 	upload <- bytes
 }
 
-func (h *tcpHandler) handleDownload(local onet.DuplexConn, remote split.DuplexConn) (bytes int64, err error) {
+func (h *tcpDialer) handleDownload(local onet.DuplexConn, remote split.DuplexConn) (bytes int64, err error) {
 	bytes, err = io.Copy(local, remote)
 	local.CloseWrite()
 	remote.CloseRead()
 	return
 }
 
-func (h *tcpHandler) forward(local net.Conn, remote split.DuplexConn, summary *TCPSocketSummary) {
+func (h *tcpDialer) forward(local net.Conn, remote split.DuplexConn, summary *TCPSocketSummary) {
 	localtcp := local.(onet.DuplexConn)
 	upload := make(chan int64)
 	start := time.Now()
@@ -123,12 +124,11 @@ func filteredPort(addr net.Addr) int16 {
 	return -1
 }
 
-func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
+func (h *tcpDialer) DialTCP(target *net.TCPAddr) (core.DoubleStream, error) {
 	// DNS override
 	if target.IP.Equal(h.fakedns.IP) && target.Port == h.fakedns.Port {
 		dns := h.dns.Load()
-		go doh.Accept(dns, conn)
-		return nil
+		return doh.Accept(dns), nil
 	}
 	var summary TCPSocketSummary
 	summary.ServerPort = filteredPort(target)
@@ -151,23 +151,23 @@ func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
 		}
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	summary.Synack = int32(time.Since(start).Seconds() * 1000)
-	go h.forward(conn, c, &summary)
 	log.Infof("new proxy connection for target: %s:%s", target.Network(), target.String())
-	return nil
+	// FIXME populate summary.Duration
+	return metrics.MeasureConn(c, &summary.UploadBytes, &summary.DownloadBytes), nil
 }
 
-func (h *tcpHandler) SetDNS(dns doh.Transport) {
+func (h *tcpDialer) SetDNS(dns doh.Transport) {
 	h.dns.Store(dns)
 	h.sniReporter.SetDNS(dns)
 }
 
-func (h *tcpHandler) SetAlwaysSplitHTTPS(s bool) {
+func (h *tcpDialer) SetAlwaysSplitHTTPS(s bool) {
 	h.alwaysSplitHTTPS = s
 }
 
-func (h *tcpHandler) EnableSNIReporter(file io.ReadWriter, suffix, country string) error {
+func (h *tcpDialer) EnableSNIReporter(file io.ReadWriter, suffix, country string) error {
 	return h.sniReporter.Configure(file, suffix, country)
 }

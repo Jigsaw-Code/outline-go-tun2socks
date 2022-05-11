@@ -18,8 +18,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Jigsaw-Code/outline-go-tun2socks/core"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/core/proxy/dnsfallback"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 
 	oss "github.com/Jigsaw-Code/outline-go-tun2socks/shadowsocks"
@@ -55,13 +53,13 @@ type outlinetunnel struct {
 // `isUDPEnabled` indicates if the Shadowsocks proxy and the network support proxying UDP traffic.
 // `tunWriter` is used to output packets back to the TUN device.  OutlineTunnel.Disconnect() will close `tunWriter`.
 func NewTunnel(host string, port int, password, cipher string, isUDPEnabled bool, endpoint stack.LinkEndpoint) (Tunnel, error) {
-	_, err := shadowsocks.NewClient(host, port, password, cipher)
+	client, err := shadowsocks.NewClient(host, port, password, cipher)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid Shadowsocks proxy parameters: %v", err.Error())
 	}
 	t := &outlinetunnel{nil, host, port, password, cipher, isUDPEnabled}
-	tcp, udp := t.getConnectionHandlers()
-	t.Tunnel, err = tunnel.MakeTunnel(endpoint, tcp, udp)
+	dialer := oss.Dialer{Client: client}
+	t.Tunnel, err = tunnel.MakeTunnel(endpoint, dialer, dialer, 30*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -79,17 +77,4 @@ func (t *outlinetunnel) UpdateUDPSupport() bool {
 		// FIXME: swap UDP handler
 	}
 	return isUDPEnabled
-}
-
-// Registers UDP and TCP Shadowsocks connection handlers to the tunnel's host and port.
-// Registers a DNS/TCP fallback UDP handler when UDP is disabled.
-func (t *outlinetunnel) getConnectionHandlers() (core.TCPConnHandler, core.UDPConnHandler) {
-	var udpHandler core.UDPConnHandler
-	if t.isUDPEnabled {
-		udpHandler = oss.NewUDPHandler(t.host, t.port, t.password, t.cipher, 30*time.Second)
-	} else {
-		udpHandler = dnsfallback.NewUDPHandler()
-	}
-	tcphandler := oss.NewTCPHandler(t.host, t.port, t.password, t.cipher)
-	return tcphandler, udpHandler
 }

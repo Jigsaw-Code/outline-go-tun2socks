@@ -5,7 +5,7 @@ go 1.15
 require (
 	github.com/Jigsaw-Code/choir v1.0.1
 	github.com/Jigsaw-Code/getsni v1.0.0
-	github.com/Jigsaw-Code/outline-ss-server v1.3.2
+	github.com/Jigsaw-Code/outline-ss-server v1.3.5
 	github.com/eycorsican/go-tun2socks v1.16.11
 	github.com/songgao/water v0.0.0-20200317203138-2b4b6d7c09d8 // indirect
 	golang.org/x/net v0.0.0-20211015210444-4f30a5c0130f
