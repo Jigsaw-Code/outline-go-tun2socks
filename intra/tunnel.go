@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jigsaw-Code/outline-go-tun2socks/dns"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/doh"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
@@ -37,11 +38,11 @@ type Listener interface {
 type Tunnel interface {
 	tunnel.Tunnel
 	// Get the DNSTransport (default: nil).
-	GetDNS() doh.Transport
+	GetDNS() dns.Transport
 	// Set the DNSTransport.  This method must be called before connecting the transport
 	// to the TUN device.  The transport can be changed at any time during operation, but
 	// must not be nil.
-	SetDNS(doh.Transport)
+	SetDNS(dns.Transport)
 	// When set to true, Intra will pre-emptively split all HTTPS connections.
 	SetAlwaysSplitHTTPS(bool)
 	// Enable reporting of SNIs that resulted in connection failures, using the
@@ -55,8 +56,8 @@ type Tunnel interface {
 type intratunnel struct {
 	tunnel.Tunnel
 	tcp TCPDialer
-	udp UDPConnListener
-	dns doh.Transport
+	udp dns.UDPListener
+	dns dns.Transport
 }
 
 // NewIntraTunnel creates a connected Intra session.
@@ -69,8 +70,8 @@ type intratunnel struct {
 // `endpoint` is the TUN device
 // `dialer` and `config` will be used for all network activity.
 // `listener` will be notified at the completion of every tunneled socket.
-func NewTunnel(fakedns string, dohdns doh.Transport, endpoint stack.LinkEndpoint, dialer *net.Dialer, config *net.ListenConfig, listener Listener) (Tunnel, error) {
-	tcp, udp, err := getConnectionHandlers(fakedns, dialer, config, listener)
+func NewTunnel(fakedns string, dohdns dns.Transport, endpoint stack.LinkEndpoint, dialer *net.Dialer, config *net.ListenConfig, listener Listener) (Tunnel, error) {
+	tcp, udp, err := getIntraDialers(fakedns, dialer, config, listener)
 	if err != nil {
 		return nil, err
 	}
@@ -91,7 +92,7 @@ func NewTunnel(fakedns string, dohdns doh.Transport, endpoint stack.LinkEndpoint
 }
 
 // Registers Intra's custom UDP and TCP connection handlers to the tun2socks core.
-func getConnectionHandlers(fakedns string, dialer *net.Dialer, config *net.ListenConfig, listener Listener) (TCPDialer, UDPConnListener, error) {
+func getIntraDialers(fakedns string, dialer *net.Dialer, config *net.ListenConfig, listener Listener) (TCPDialer, dns.UDPListener, error) {
 	udpfakedns, err := net.ResolveUDPAddr("udp", fakedns)
 	if err != nil {
 		return nil, nil, err
@@ -105,13 +106,13 @@ func getConnectionHandlers(fakedns string, dialer *net.Dialer, config *net.Liste
 	return tcp, udp, nil
 }
 
-func (t *intratunnel) SetDNS(dns doh.Transport) {
+func (t *intratunnel) SetDNS(dns dns.Transport) {
 	t.dns = dns
 	t.udp.SetDNS(dns)
 	t.tcp.SetDNS(dns)
 }
 
-func (t *intratunnel) GetDNS() doh.Transport {
+func (t *intratunnel) GetDNS() dns.Transport {
 	return t.dns
 }
 

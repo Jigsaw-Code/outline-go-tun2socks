@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/getsni"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/core"
 )
 
 type RetryStats struct {
@@ -33,16 +34,89 @@ type RetryStats struct {
 	Timeout bool   // True if the retry was caused by a timeout.
 }
 
+type HasRetryStats interface {
+	GetRetryStats() RetryStats
+}
+
+// Given timestamps immediately before and after a successful socket connection
+// (i.e. the time the SYN was sent and the time the SYNACK was received), this
+// function returns a reasonable timeout for replies to a hello sent on this socket.
+func timeout(before, after time.Time) time.Duration {
+	// These values were chosen to have a <1% false positive rate based on test data.
+	// False positives trigger an unnecessary retry, which can make connections slower, so they are
+	// worth avoiding.  However, overly long timeouts make retry slower and less useful.
+	rtt := after.Sub(before)
+	return 1200*time.Millisecond + 2*rtt
+}
+
+// DefaultTimeout is the value that will cause DialWithSplitRetry to use the system's
+// default TCP timeout (typically 2-3 minutes).
+const DefaultTimeout time.Duration = 0
+
+type tcpDialer struct {
+	dialer *net.Dialer
+}
+
+type Dialer interface {
+	core.BaseDialer
+	core.TCPDialer
+}
+
+func MakeRetryDialer(dialer *net.Dialer) Dialer {
+	if dialer == nil {
+		dialer = &net.Dialer{}
+	}
+	return tcpDialer{dialer: dialer}
+}
+
+// DialWithSplitRetry returns a TCP connection that transparently retries by
+// splitting the initial upstream segment if the socket closes without receiving a
+// reply.  Like net.Conn, it is intended for two-threaded use, with one thread calling
+// Read and CloseRead, and another calling Write, ReadFrom, and CloseWrite.
+// `dialer` will be used to establish the connection.
+// `addr` is the destination.
+func (d tcpDialer) dialTCP(addr *net.TCPAddr) (*retrier, error) {
+	before := time.Now()
+	conn, err := d.dialer.Dial(addr.Network(), addr.String())
+	if err != nil {
+		return nil, err
+	}
+	after := time.Now()
+
+	r := &retrier{
+		dialer:            d.dialer,
+		addr:              addr,
+		conn:              conn.(*net.TCPConn),
+		timeout:           timeout(before, after),
+		retryCompleteFlag: make(chan struct{}),
+		readCloseFlag:     make(chan struct{}),
+		writeCloseFlag:    make(chan struct{}),
+	}
+
+	return r, nil
+}
+
+func (d tcpDialer) DialTCP(addr *net.TCPAddr) (core.DoubleStream, error) {
+	return d.dialTCP(addr)
+}
+
+func (d tcpDialer) Dial(network, address string) (net.Conn, error) {
+	tcpaddr, err := net.ResolveTCPAddr(network, address)
+	if err != nil {
+		return nil, err
+	}
+	return d.dialTCP(tcpaddr)
+}
+
 // retrier implements the DuplexConn interface.
 type retrier struct {
 	// mutex is a lock that guards `conn`, `hello`, and `retryCompleteFlag`.
 	// These fields must not be modified except under this lock.
 	// After retryCompletedFlag is closed, these values will not be modified
 	// again so locking is no longer required for reads.
-	mutex   sync.Mutex
-	dialer  *net.Dialer
-	network string
-	addr    *net.TCPAddr
+	mutex  sync.Mutex
+	dialer *net.Dialer
+	addr   *net.TCPAddr
 	// conn is the current underlying connection.  It is only modified by the reader
 	// thread, so the reader functions may access it without acquiring a lock.
 	conn *net.TCPConn
@@ -61,7 +135,7 @@ type retrier struct {
 	// Flags indicating whether the caller has called CloseRead and CloseWrite.
 	readCloseFlag  chan struct{}
 	writeCloseFlag chan struct{}
-	stats          *RetryStats
+	stats          RetryStats
 }
 
 // Helper functions for reading flags.
@@ -93,56 +167,6 @@ func (r *retrier) writeClosed() bool {
 
 func (r *retrier) retryCompleted() bool {
 	return closed(r.retryCompleteFlag)
-}
-
-// Given timestamps immediately before and after a successful socket connection
-// (i.e. the time the SYN was sent and the time the SYNACK was received), this
-// function returns a reasonable timeout for replies to a hello sent on this socket.
-func timeout(before, after time.Time) time.Duration {
-	// These values were chosen to have a <1% false positive rate based on test data.
-	// False positives trigger an unnecessary retry, which can make connections slower, so they are
-	// worth avoiding.  However, overly long timeouts make retry slower and less useful.
-	rtt := after.Sub(before)
-	return 1200*time.Millisecond + 2*rtt
-}
-
-// DefaultTimeout is the value that will cause DialWithSplitRetry to use the system's
-// default TCP timeout (typically 2-3 minutes).
-const DefaultTimeout time.Duration = 0
-
-// DialWithSplitRetry returns a TCP connection that transparently retries by
-// splitting the initial upstream segment if the socket closes without receiving a
-// reply.  Like net.Conn, it is intended for two-threaded use, with one thread calling
-// Read and CloseRead, and another calling Write, ReadFrom, and CloseWrite.
-// `dialer` will be used to establish the connection.
-// `addr` is the destination.
-// If `stats` is non-nil, it will be populated with retry-related information.
-func DialWithSplitRetry(dialer *net.Dialer, addr *net.TCPAddr, stats *RetryStats) (DuplexConn, error) {
-	before := time.Now()
-	conn, err := dialer.Dial(addr.Network(), addr.String())
-	if err != nil {
-		return nil, err
-	}
-	after := time.Now()
-
-	if stats == nil {
-		// This is a fake stats object that will be written but never read.  Its purpose
-		// is to avoid the need for nil checks at each point where stats are updated.
-		stats = &RetryStats{}
-	}
-
-	r := &retrier{
-		dialer:            dialer,
-		addr:              addr,
-		conn:              conn.(*net.TCPConn),
-		timeout:           timeout(before, after),
-		retryCompleteFlag: make(chan struct{}),
-		readCloseFlag:     make(chan struct{}),
-		writeCloseFlag:    make(chan struct{}),
-		stats:             stats,
-	}
-
-	return r, nil
 }
 
 // Read-related functions.
@@ -355,4 +379,8 @@ func (r *retrier) SetDeadline(t time.Time) error {
 		return e1
 	}
 	return e2
+}
+
+func (r *retrier) GetRetryStats() RetryStats {
+	return r.stats
 }

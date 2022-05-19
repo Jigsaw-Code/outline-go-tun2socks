@@ -17,31 +17,49 @@ package split
 import (
 	"io"
 	"net"
+
+	"github.com/Jigsaw-Code/outline-go-tun2socks/core"
 )
 
-// DuplexConn represents a bidirectional stream socket.
-type DuplexConn interface {
-	net.Conn
-	io.ReaderFrom
-	CloseWrite() error
-	CloseRead() error
+type dialer struct {
+	*net.Dialer
 }
 
-type splitter struct {
-	*net.TCPConn
-	used bool // Initially false.  Becomes true after the first write.
-}
-
-// DialWithSplit returns a TCP connection that always splits the initial upstream segment.
-// Like net.Conn, it is intended for two-threaded use, with one thread calling
-// Read and CloseRead, and another calling Write, ReadFrom, and CloseWrite.
-func DialWithSplit(d *net.Dialer, addr *net.TCPAddr) (DuplexConn, error) {
+func (d dialer) dialTCP(addr *net.TCPAddr) (*splitter, error) {
 	conn, err := d.Dial(addr.Network(), addr.String())
 	if err != nil {
 		return nil, err
 	}
 
 	return &splitter{TCPConn: conn.(*net.TCPConn)}, nil
+}
+
+func (d dialer) DialTCP(addr *net.TCPAddr) (core.DoubleStream, error) {
+	return d.dialTCP(addr)
+}
+
+func (d dialer) Dial(network, address string) (net.Conn, error) {
+	// FIXME: Remove duplication of this code.
+	tcpaddr, err := net.ResolveTCPAddr(network, address)
+	if err != nil {
+		return nil, err
+	}
+	return d.dialTCP(tcpaddr)
+}
+
+// DialWithSplit returns a TCP connection that always splits the initial upstream segment.
+// Like net.Conn, it is intended for two-threaded use, with one thread calling
+// Read and CloseRead, and another calling Write, ReadFrom, and CloseWrite.
+func MakeAlwaysSplitDialer(d *net.Dialer) Dialer {
+	if d == nil {
+		d = &net.Dialer{}
+	}
+	return dialer{d}
+}
+
+type splitter struct {
+	*net.TCPConn
+	used bool // Initially false.  Becomes true after the first write.
 }
 
 // Write-related functions

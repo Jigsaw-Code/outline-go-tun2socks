@@ -20,15 +20,16 @@ import (
 	"net"
 	"testing"
 	"time"
+
+	"github.com/Jigsaw-Code/outline-go-tun2socks/core"
 )
 
 type setup struct {
 	t              *testing.T
 	server         *net.TCPListener
-	clientSide     DuplexConn
+	clientSide     core.DoubleStream
 	serverSide     *net.TCPConn
 	serverReceived []byte
-	stats          *RetryStats
 }
 
 func makeSetup(t *testing.T) *setup {
@@ -45,8 +46,8 @@ func makeSetup(t *testing.T) *setup {
 	if !ok {
 		t.Error("Server isn't TCP?")
 	}
-	var stats RetryStats
-	clientSide, err := DialWithSplitRetry(&net.Dialer{}, serverAddr, &stats)
+	dialer := MakeRetryDialer(nil)
+	clientSide, err := dialer.DialTCP(serverAddr)
 	if err != nil {
 		t.Error(err)
 	}
@@ -54,7 +55,7 @@ func makeSetup(t *testing.T) *setup {
 	if err != nil {
 		t.Error(err)
 	}
-	return &setup{t, server, clientSide, serverSide, nil, &stats}
+	return &setup{t, server, clientSide, serverSide, nil}
 }
 
 const BUFSIZE = 256
@@ -100,12 +101,12 @@ func (s *setup) sendDown() {
 	send(s.serverSide, s.clientSide, s.t)
 }
 
-func closeRead(closed, blocked DuplexConn, t *testing.T) {
+func closeRead(closed, blocked core.DoubleStream, t *testing.T) {
 	closed.CloseRead()
 	// TODO: Figure out if this is detectable on the opposite side.
 }
 
-func closeWrite(closed, blocked DuplexConn, t *testing.T) {
+func closeWrite(closed, blocked core.DoubleStream, t *testing.T) {
 	closed.CloseWrite()
 	n, err := blocked.Read(make([]byte, 1))
 	if err != io.EOF || n > 0 {
@@ -177,13 +178,14 @@ func (s *setup) confirmRetry() {
 }
 
 func (s *setup) checkNoSplit() {
-	if s.stats.Split > 0 {
+	stats := s.clientSide.(HasRetryStats).GetRetryStats()
+	if stats.Split > 0 {
 		s.t.Error("Retry should not have occurred")
 	}
 }
 
 func (s *setup) checkStats(bytes int32, chunks int16, timeout bool) {
-	r := s.stats
+	r := s.clientSide.(HasRetryStats).GetRetryStats()
 	if r.Bytes != bytes {
 		s.t.Errorf("Expected %d bytes, got %d", bytes, r.Bytes)
 	}

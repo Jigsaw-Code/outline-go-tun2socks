@@ -66,7 +66,8 @@ func main() {
 	}
 
 	log.Println("Trying split connection")
-	splitConn, err := split.DialWithSplit(&net.Dialer{}, addr)
+	dialer := split.MakeAlwaysSplitDialer(nil)
+	splitConn, err := dialer.Dial(addr.Network(), addr.String())
 	if err != nil {
 		log.Fatalf("Could not establish a splitting socket: %v", err)
 	}

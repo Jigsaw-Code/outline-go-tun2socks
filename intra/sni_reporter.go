@@ -20,7 +20,7 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/choir"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/doh"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/dns"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
@@ -40,13 +40,13 @@ const burst = 10 * time.Second
 // tcpSNIReporter is a thread-safe wrapper around choir.Reporter
 type tcpSNIReporter struct {
 	mu     sync.RWMutex // Protects dns, suffix, and r.
-	dns    doh.Transport
+	dns    dns.Transport
 	suffix string
 	r      choir.Reporter
 }
 
 // SetDNS changes the DNS transport used for uploading reports.
-func (r *tcpSNIReporter) SetDNS(dns doh.Transport) {
+func (r *tcpSNIReporter) SetDNS(dns dns.Transport) {
 	r.mu.Lock()
 	r.dns = dns
 	r.mu.Unlock()

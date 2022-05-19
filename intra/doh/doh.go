@@ -30,10 +30,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/Jigsaw-Code/outline-go-tun2socks/core"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/dns"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/doh/ipmap"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/split"
 	"github.com/eycorsican/go-tun2socks/common/log"
-	"golang.org/x/net/dns/dnsmessage"
 )
 
 const (
@@ -75,26 +75,14 @@ type Listener interface {
 	OnResponse(Token, *Summary)
 }
 
-// Transport represents a DNS query transport.  This interface is exported by gobind,
-// so it has to be very simple.
-type Transport interface {
-	// Given a DNS query (including ID), returns a DNS response with matching
-	// ID, or an error if no response was received.  The error may be accompanied
-	// by a SERVFAIL response if appropriate.
-	Query(q []byte) ([]byte, error)
-	// Return the server URL used to initialize this transport.
-	GetURL() string
-}
-
 // TODO: Keep a context here so that queries can be canceled.
 type transport struct {
-	Transport
 	url                string
 	hostname           string
 	port               int
 	ips                ipmap.IPMap
 	client             http.Client
-	dialer             *net.Dialer
+	dialer             core.BaseDialer
 	listener           Listener
 	hangoverLock       sync.RWMutex
 	hangoverExpiration time.Time
@@ -124,7 +112,8 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 	confirmed := ips.Confirmed()
 	if confirmed != nil {
 		log.Debugf("Trying confirmed IP %s for addr %s", confirmed.String(), addr)
-		if conn, err = split.DialWithSplitRetry(t.dialer, tcpaddr(confirmed), nil); err == nil {
+		confirmedTCP := tcpaddr(confirmed)
+		if conn, err = t.dialer.Dial(confirmedTCP.Network(), confirmedTCP.String()); err == nil {
 			log.Infof("Confirmed IP %s worked", confirmed.String())
 			return conn, nil
 		}
@@ -138,7 +127,8 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 			// Don't try this IP twice.
 			continue
 		}
-		if conn, err = split.DialWithSplitRetry(t.dialer, tcpaddr(ip), nil); err == nil {
+		ipAsTCP := tcpaddr(ip)
+		if conn, err = t.dialer.Dial(ipAsTCP.Network(), ipAsTCP.String()); err == nil {
 			log.Infof("Found working IP: %s", ip.String())
 			return conn, nil
 		}
@@ -155,7 +145,7 @@ func (t *transport) dial(network, addr string) (net.Conn, error) {
 //   timeout but will not mutate it otherwise.
 // `auth` will provide a client certificate if required by the TLS server.
 // `listener` will receive the status of each DNS query when it is complete.
-func NewTransport(rawurl string, addrs []string, dialer *net.Dialer, auth ClientAuth, listener Listener) (Transport, error) {
+func NewTransport(rawurl string, addrs []string, dialer core.BaseDialer, resolver *net.Resolver, auth ClientAuth, listener Listener) (dns.Transport, error) {
 	if dialer == nil {
 		dialer = &net.Dialer{}
 	}
@@ -184,7 +174,7 @@ func NewTransport(rawurl string, addrs []string, dialer *net.Dialer, auth Client
 		port:     port,
 		listener: listener,
 		dialer:   dialer,
-		ips:      ipmap.NewIPMap(dialer.Resolver),
+		ips:      ipmap.NewIPMap(resolver),
 	}
 	ips := t.ips.Get(t.hostname)
 	for _, addr := range addrs {
@@ -251,7 +241,7 @@ func (t *transport) doQuery(q []byte) (response []byte, server *net.TCPAddr, qer
 	inHangover := time.Now().Before(t.hangoverExpiration)
 	t.hangoverLock.RUnlock()
 	if inHangover {
-		response = tryServfail(q)
+		response = dns.TryServfail(q)
 		qerr = &queryError{HTTPError, errors.New("Forwarder is in servfail hangover")}
 		return
 	}
@@ -296,7 +286,7 @@ func (t *transport) doQuery(q []byte) (response []byte, server *net.TCPAddr, qer
 			t.hangoverLock.Unlock()
 		}
 
-		response = tryServfail(q)
+		response = dns.TryServfail(q)
 	} else if server != nil {
 		// Record a working IP address for this server iff qerr is nil
 		t.ips.Get(hostname).Confirm(server.IP)
@@ -467,25 +457,4 @@ func (t *transport) Query(q []byte) ([]byte, error) {
 
 func (t *transport) GetURL() string {
 	return t.url
-}
-
-// Servfail returns a SERVFAIL response to the query q.
-func Servfail(q []byte) ([]byte, error) {
-	var msg dnsmessage.Message
-	if err := msg.Unpack(q); err != nil {
-		return nil, err
-	}
-	msg.Response = true
-	msg.RecursionAvailable = true
-	msg.RCode = dnsmessage.RCodeServerFailure
-	msg.Additionals = nil // Strip EDNS
-	return msg.Pack()
-}
-
-func tryServfail(q []byte) []byte {
-	response, err := Servfail(q)
-	if err != nil {
-		log.Warnf("Error constructing servfail: %v", err)
-	}
-	return response
 }

@@ -17,15 +17,13 @@
 package intra
 
 import (
-	"context"
 	"net"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/core"
-	"github.com/eycorsican/go-tun2socks/common/log"
-
-	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/doh"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/dns"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/split"
 )
 
 // UDPSocketSummary describes a non-DNS UDP association, reported when it is discarded.
@@ -40,130 +38,63 @@ type UDPListener interface {
 	OnUDPSocketClosed(*UDPSocketSummary)
 }
 
-type tracker struct {
-	start    time.Time
-	upload   int64 // Non-DNS upload bytes
-	download int64 // Non-DNS download bytes
+type measuringListener struct {
+	engine   core.UDPListener
+	listener UDPListener
 }
 
-type packetConnWrapper struct {
+func (l measuringListener) ListenUDP(reverse core.ReverseUDPConn) (net.PacketConn, error) {
+	conn, err := l.engine.ListenUDP(reverse)
+	if err != nil {
+		return nil, err
+	}
+	return &measuringPacketConn{
+		PacketConn: conn,
+		listener:   l.listener,
+		start:      time.Now(),
+	}, nil
+}
+
+type measuringPacketConn struct {
 	net.PacketConn
-	tracker
-	reverse  core.ReverseUDPConn
-	listener *udpListener
-
-	mu                          sync.Mutex // TODO: Optimize with atomics
-	pendingQueries              int
-	readDeadline, writeDeadline time.Time
-	closed                      bool
+	listener UDPListener
+	start    time.Time
+	upload   int64
+	download int64
+	closed   int32
 }
 
-func (c *packetConnWrapper) ReadFrom(buf []byte) (int, net.Addr, error) {
+func (c *measuringPacketConn) ReadFrom(buf []byte) (int, net.Addr, error) {
 	n, addr, err := c.PacketConn.ReadFrom(buf)
-	c.tracker.download += int64(n)
+	atomic.AddInt64(&c.download, int64(n))
 	return n, addr, err
 }
 
-func (c *packetConnWrapper) WriteTo(p []byte, addr net.Addr) (int, error) {
-	udpAddr := addr.(*net.UDPAddr)
-	if udpAddr.IP.Equal(c.listener.fakedns.IP) && udpAddr.Port == c.listener.fakedns.Port {
-		go c.doDoh(p)
-		return len(p), nil
-	}
-	n, err := c.WriteTo(p, addr)
-	c.tracker.upload += int64(n)
+func (c *measuringPacketConn) WriteTo(pkt []byte, dst net.Addr) (int, error) {
+	n, err := c.PacketConn.WriteTo(pkt, dst)
+	atomic.AddInt64(&c.upload, int64(n))
 	return n, err
 }
 
-func (c *packetConnWrapper) SetReadDeadline(deadline time.Time) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.readDeadline = deadline
-	if c.pendingQueries == 0 {
-		return c.PacketConn.SetReadDeadline(deadline)
+func (c *measuringPacketConn) Close() error {
+	if !atomic.CompareAndSwapInt32(&c.closed, 0, 1) {
+		return nil // Already closed
 	}
-	return nil
+	c.listener.OnUDPSocketClosed(&UDPSocketSummary{
+		UploadBytes:   atomic.LoadInt64(&c.upload),
+		DownloadBytes: atomic.LoadInt64(&c.download),
+		Duration:      int32(time.Since(c.start).Seconds()),
+	})
+	return c.PacketConn.Close()
 }
 
-func (c *packetConnWrapper) SetWriteDeadline(deadline time.Time) error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.writeDeadline = deadline
-	if c.pendingQueries == 0 {
-		return c.PacketConn.SetWriteDeadline(deadline)
-	}
-	return nil
-}
-
-func (c *packetConnWrapper) SetDeadline(deadline time.Time) error {
-	// TODO: Consider atomicity.
-	c.SetReadDeadline(deadline)
-	c.SetWriteDeadline(deadline)
-	return nil // FIXME
-}
-
-func (c *packetConnWrapper) doDoh(pkt []byte) {
-	c.mu.Lock()
-	c.pendingQueries++
-	// Disable timeouts while a DoH query is pending
-	c.PacketConn.SetDeadline(time.Time{})
-	c.mu.Unlock()
-
-	dataCopy := append([]byte{}, pkt...)
-	go func() {
-		resp, err := c.listener.dns.Query(dataCopy)
-		if resp != nil {
-			err = c.reverse.WriteFrom(resp, &c.listener.fakedns)
-		}
-		if err != nil {
-			log.Warnf("DoH query failed: %v", err)
-		}
-
-		c.mu.Lock()
-		c.pendingQueries--
-		if c.pendingQueries == 0 {
-			if c.tracker.upload == 0 && c.tracker.download == 0 {
-				// conn was only used for DNS, so it's unlikely to be used again.
-				c.PacketConn.Close()
-				c.closed = true
-			} else {
-				// Restore timeouts
-				c.PacketConn.SetReadDeadline(c.readDeadline)
-				c.PacketConn.SetWriteDeadline(c.writeDeadline)
-			}
-		}
-		c.mu.Unlock()
-	}()
-}
-
-func (c *packetConnWrapper) Close() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.closed {
-		return nil
-	}
-	err := c.PacketConn.Close()
-	c.closed = true
-	// TODO: Cancel any outstanding DoH queries.
-	t := c.tracker
-	duration := int32(time.Since(t.start).Seconds())
-	c.listener.listener.OnUDPSocketClosed(&UDPSocketSummary{t.upload, t.download, duration})
-	return err
-}
-
-// UDPConnListener adds DOH support to the core.UDPListener interface.
-type UDPConnListener interface {
+type udpCombinedListener struct {
 	core.UDPListener
-	SetDNS(dns doh.Transport)
+	dns dns.UDPListener
 }
 
-type udpListener struct {
-	sync.RWMutex
-
-	fakedns  net.UDPAddr
-	dns      doh.Transport
-	config   *net.ListenConfig
-	listener UDPListener
+func (l udpCombinedListener) SetDNS(dns dns.Transport) {
+	l.dns.SetDNS(dns)
 }
 
 // NewUDPConnListener makes a UDP listener with Intra-style DNS redirection:
@@ -172,34 +103,16 @@ type udpListener struct {
 // `timeout` controls the effective NAT mapping lifetime.
 // `config` is used to bind new external UDP ports.
 // `listener` receives a summary about each UDP binding when it expires.
-func NewUDPConnListener(fakedns net.UDPAddr, config *net.ListenConfig, listener UDPListener) UDPConnListener {
-	return &udpListener{
-		fakedns:  fakedns,
-		config:   config,
-		listener: listener,
+func NewUDPConnListener(fakedns net.UDPAddr, config *net.ListenConfig, listener UDPListener) dns.UDPListener {
+	dnsListener := dns.NewUDPListener()
+	return udpCombinedListener{
+		UDPListener: split.MakeUDPListener(
+			split.MakeOneIPRule(fakedns.IP),
+			dnsListener,
+			&measuringListener{
+				engine:   core.DefaultUDPListener{ListenConfig: config},
+				listener: listener,
+			}),
+		dns: dnsListener,
 	}
-}
-
-func (h *udpListener) ListenUDP(reverse core.ReverseUDPConn) (net.PacketConn, error) {
-	bindAddr := &net.UDPAddr{IP: nil, Port: 0}
-	pc, err := h.config.ListenPacket(context.TODO(), bindAddr.Network(), bindAddr.String())
-	if err != nil {
-		log.Errorf("failed to bind udp address")
-		return nil, err
-	}
-
-	wrapped := &packetConnWrapper{
-		PacketConn: pc,
-		tracker:    tracker{start: time.Now()},
-		reverse:    reverse,
-		listener:   h,
-	}
-	log.Infof("new proxy connection")
-	return wrapped, nil
-}
-
-func (h *udpListener) SetDNS(dns doh.Transport) {
-	h.Lock()
-	h.dns = dns
-	h.Unlock()
 }

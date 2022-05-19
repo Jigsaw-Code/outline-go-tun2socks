@@ -16,7 +16,6 @@ package doh
 
 import (
 	"bytes"
-	"encoding/binary"
 	"errors"
 	"io"
 	"io/ioutil"
@@ -27,6 +26,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/Jigsaw-Code/outline-go-tun2socks/dns"
 	"golang.org/x/net/dns/dnsmessage"
 )
 
@@ -128,7 +128,7 @@ func init() {
 
 // Check that the constructor works.
 func TestNewTransport(t *testing.T) {
-	_, err := NewTransport(testURL, ips, nil, nil, nil)
+	_, err := NewTransport(testURL, ips, nil, nil, nil, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -136,11 +136,11 @@ func TestNewTransport(t *testing.T) {
 
 // Check that the constructor rejects unsupported URLs.
 func TestBadUrl(t *testing.T) {
-	_, err := NewTransport("ftp://www.example.com", nil, nil, nil, nil)
+	_, err := NewTransport("ftp://www.example.com", nil, nil, nil, nil, nil)
 	if err == nil {
 		t.Error("Expected error")
 	}
-	_, err = NewTransport("https://www.example", nil, nil, nil, nil)
+	_, err = NewTransport("https://www.example", nil, nil, nil, nil, nil)
 	if err == nil {
 		t.Error("Expected error")
 	}
@@ -149,7 +149,7 @@ func TestBadUrl(t *testing.T) {
 // Check for failure when the query is too short to be valid.
 func TestShortQuery(t *testing.T) {
 	var qerr *queryError
-	doh, _ := NewTransport(testURL, ips, nil, nil, nil)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil, nil)
 	_, err := doh.Query([]byte{})
 	if err == nil {
 		t.Error("Empty query should fail")
@@ -188,7 +188,7 @@ func TestQueryIntegration(t *testing.T) {
 
 	testQuery := func(queryData []byte) {
 
-		doh, err := NewTransport(testURL, ips, nil, nil, nil)
+		doh, err := NewTransport(testURL, ips, nil, nil, nil, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -238,7 +238,7 @@ func (r *testRoundTripper) RoundTrip(req *http.Request) (*http.Response, error) 
 
 // Check that a DNS query is converted correctly into an HTTP query.
 func TestRequest(t *testing.T) {
-	doh, _ := NewTransport(testURL, ips, nil, nil, nil)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -287,7 +287,7 @@ func queriesMostlyEqual(m1 dnsmessage.Message, m2 dnsmessage.Message) bool {
 
 // Check that a DOH response is returned correctly.
 func TestResponse(t *testing.T) {
-	doh, _ := NewTransport(testURL, ips, nil, nil, nil)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -326,7 +326,7 @@ func TestResponse(t *testing.T) {
 // Simulate an empty response.  (This is not a compliant server
 // behavior.)
 func TestEmptyResponse(t *testing.T) {
-	doh, _ := NewTransport(testURL, ips, nil, nil, nil)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -357,7 +357,7 @@ func TestEmptyResponse(t *testing.T) {
 
 // Simulate a non-200 HTTP response code.
 func TestHTTPError(t *testing.T) {
-	doh, _ := NewTransport(testURL, ips, nil, nil, nil)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -387,7 +387,7 @@ func TestHTTPError(t *testing.T) {
 
 // Simulate an HTTP query error.
 func TestSendFailed(t *testing.T) {
-	doh, _ := NewTransport(testURL, ips, nil, nil, nil)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil, nil)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -410,7 +410,7 @@ func TestSendFailed(t *testing.T) {
 // when queries suceeded and fail, respectively.
 func TestDohIPConfirmDisconfirm(t *testing.T) {
 	u, _ := url.Parse(testURL)
-	doh, _ := NewTransport(testURL, ips, nil, nil, nil)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil, nil)
 	transport := doh.(*transport)
 	hostname := u.Hostname()
 	ipmap := transport.ips.Get(hostname)
@@ -475,7 +475,7 @@ func (c *fakeConn) RemoteAddr() net.Addr {
 // Check that the DNSListener is called with a correct summary.
 func TestListener(t *testing.T) {
 	listener := &fakeListener{}
-	doh, _ := NewTransport(testURL, ips, nil, nil, listener)
+	doh, _ := NewTransport(testURL, ips, nil, nil, nil, listener)
 	transport := doh.(*transport)
 	rt := makeTestRoundTripper()
 	transport.client.Transport = rt
@@ -518,185 +518,6 @@ func TestListener(t *testing.T) {
 		t.Errorf("Wrong status: %d", s.Status)
 	}
 }
-
-type fakeTransport struct {
-	Transport
-	query    chan []byte
-	response chan []byte
-	err      error
-}
-
-func (t *fakeTransport) Query(q []byte) ([]byte, error) {
-	t.query <- q
-	if t.err != nil {
-		return nil, t.err
-	}
-	return <-t.response, nil
-}
-
-func (t *fakeTransport) GetURL() string {
-	return "fake"
-}
-
-func (t *fakeTransport) Close() {
-	t.err = errors.New("closed")
-	close(t.query)
-	close(t.response)
-}
-
-func newFakeTransport() *fakeTransport {
-	return &fakeTransport{
-		query:    make(chan []byte),
-		response: make(chan []byte),
-	}
-}
-
-// Test a successful query over TCP
-func TestAccept(t *testing.T) {
-	doh := newFakeTransport()
-
-	// Start the forwarder running.
-	client := Accept(doh)
-
-	lbuf := make([]byte, 2)
-	// Send Query
-	queryData := simpleQueryBytes
-	binary.BigEndian.PutUint16(lbuf, uint16(len(queryData)))
-	n, err := client.Write(lbuf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 2 {
-		t.Error("Length write problem")
-	}
-	n, err = client.Write(queryData)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != len(queryData) {
-		t.Error("Query write problem")
-	}
-
-	// Read query
-	queryRead := <-doh.query
-	if !bytes.Equal(queryRead, queryData) {
-		t.Error("Query mismatch")
-	}
-
-	// Send fake response
-	responseData := []byte{1, 2, 8, 9, 10}
-	doh.response <- responseData
-
-	// Get Response
-	n, err = client.Read(lbuf)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if n != 2 {
-		t.Error("Length read problem")
-	}
-	rlen := binary.BigEndian.Uint16(lbuf)
-	resp := make([]byte, int(rlen))
-	_, err = client.Read(resp)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !bytes.Equal(responseData, resp) {
-		t.Error("Response mismatch")
-	}
-
-	client.CloseWrite()
-}
-
-// Sends a TCP query that results in failure.  When a query fails,
-// Accept should close the TCP socket.
-func TestAcceptFail(t *testing.T) {
-	doh := newFakeTransport()
-
-	// Start the forwarder running.
-	client := Accept(doh)
-
-	lbuf := make([]byte, 2)
-	// Send Query
-	queryData := simpleQueryBytes
-	binary.BigEndian.PutUint16(lbuf, uint16(len(queryData)))
-	client.Write(lbuf)
-	client.Write(queryData)
-
-	// Indicate that the query failed
-	doh.err = errors.New("fake error")
-
-	// Read query
-	queryRead := <-doh.query
-	if !bytes.Equal(queryRead, queryData) {
-		t.Error("Query mismatch")
-	}
-
-	// Accept should have closed the socket.
-	n, _ := client.Read(lbuf)
-	if n != 0 {
-		t.Error("Expected to read 0 bytes")
-	}
-}
-
-// Sends a TCP query, and closes the socket before the response is sent.
-// This tests for crashes when a response cannot be delivered.
-func TestAcceptClose(t *testing.T) {
-	doh := newFakeTransport()
-
-	// Start the forwarder running.
-	client := Accept(doh)
-
-	lbuf := make([]byte, 2)
-	// Send Query
-	queryData := simpleQueryBytes
-	binary.BigEndian.PutUint16(lbuf, uint16(len(queryData)))
-	client.Write(lbuf)
-	client.Write(queryData)
-
-	// Read query
-	queryRead := <-doh.query
-	if !bytes.Equal(queryRead, queryData) {
-		t.Error("Query mismatch")
-	}
-
-	// Close the TCP connection
-	client.CloseWrite()
-
-	// Send fake response too late.
-	responseData := []byte{1, 2, 8, 9, 10}
-	doh.response <- responseData
-}
-
-// Test failure due to a response that is larger than the
-// maximum message size for DNS over TCP (65535).
-func TestAcceptOversize(t *testing.T) {
-	doh := newFakeTransport()
-
-	// Start the forwarder running.
-	client := Accept(doh)
-
-	lbuf := make([]byte, 2)
-	// Send Query
-	queryData := simpleQueryBytes
-	binary.BigEndian.PutUint16(lbuf, uint16(len(queryData)))
-	client.Write(lbuf)
-	client.Write(queryData)
-
-	// Read query
-	<-doh.query
-
-	// Send oversize response
-	doh.response <- make([]byte, 65536)
-
-	// Accept should have closed the socket because the response
-	// cannot be written.
-	n, _ := client.Read(lbuf)
-	if n != 0 {
-		t.Error("Expected to read 0 bytes")
-	}
-}
-
 func TestComputePaddingSize(t *testing.T) {
 	if computePaddingSize(100-kOptPaddingHeaderLen, 100) != 0 {
 		t.Errorf("Expected no padding")
@@ -835,7 +656,7 @@ func TestAddEdnsPaddingCompressedPaddedQuery(t *testing.T) {
 }
 
 func TestServfail(t *testing.T) {
-	sf, err := Servfail(simpleQueryBytes)
+	sf, err := dns.Servfail(simpleQueryBytes)
 	if err != nil {
 		t.Fatal(err)
 	}

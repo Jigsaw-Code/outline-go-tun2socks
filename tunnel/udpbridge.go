@@ -1,3 +1,17 @@
+// Copyright 2022 The Outline Authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 package tunnel
 
 import (
@@ -15,13 +29,6 @@ import (
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 	"gvisor.dev/gvisor/pkg/tcpip/transport/udp"
 )
-
-func udpAddr(addr net.Addr) (*net.UDPAddr, error) {
-	if udp, ok := addr.(*net.UDPAddr); ok {
-		return udp, nil
-	}
-	return net.ResolveUDPAddr(addr.Network(), addr.String())
-}
 
 type nat struct {
 	sync.RWMutex
@@ -100,28 +107,9 @@ func (n *nat) getConn(localAddr tcpip.FullAddress, netstack *stack.Stack) (net.P
 			return nil, fmt.Errorf("failed to listen in NAT: %w", err)
 		}
 		n.m[localAddr] = conn
-		go copyDownstream(reverse, conn)
+		go core.CopyDownstream(reverse, conn)
 	}
 	return conn, nil
-}
-
-func copyDownstream(dst reverseUDPConn, src net.PacketConn) {
-	buf := make([]byte, 2048) // TODO: Use a pool.
-	for {
-		n, addr, err := src.ReadFrom(buf)
-		if err != nil && n == 0 {
-			break
-		}
-		udp, err := udpAddr(addr)
-		if err != nil {
-			break
-		}
-		if err := dst.WriteFrom(buf[:n], udp); err != nil {
-			break
-		}
-	}
-	src.Close()
-	dst.Close()
 }
 
 func (n *nat) HandleOutboundPacket(id stack.TransportEndpointID, pkt *stack.PacketBuffer) bool {
@@ -145,7 +133,7 @@ func (n *nat) HandleOutboundPacket(id stack.TransportEndpointID, pkt *stack.Pack
 		log.Printf("UDP upload write error: %v", err)
 		return false
 	}
-	conn.SetDeadline(time.Now().Add(n.timeout))
+	conn.SetReadDeadline(time.Now().Add(n.timeout))
 	return true
 }
 
