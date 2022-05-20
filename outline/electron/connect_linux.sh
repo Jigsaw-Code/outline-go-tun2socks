@@ -11,8 +11,11 @@ readonly PROXY_IP="$1"
 readonly PROXY_PORT="$2"
 readonly PROXY_PASSWORD="$3"
 
+readonly EXCLUDE_HOSTS="ipinfo\\.io\\.$"
+readonly EXCLUDE_IPS="34.117.59.81/32"
+
 go build -v .
 
-echo "{\"action\":\"configureRouting\",\"parameters\":{\"proxyIp\":\"${PROXY_IP}\",\"routerIp\":\"10.0.85.1\"}}" | socat UNIX-CONNECT:/var/run/outline_controller -
-./electron -proxyHost "${PROXY_IP}" -proxyPort "${PROXY_PORT}" -proxyPassword "${PROXY_PASSWORD}" -logLevel debug -tunName outline-tun0 -memprofile mem.prof
+echo "{\"action\":\"configureRouting\",\"parameters\":{\"proxyIp\":\"${PROXY_IP}\",\"resolverIp\":\"9.9.9.9\"}}" | socat UNIX-CONNECT:/var/run/outline_controller -
+./electron -proxyHost "${PROXY_IP}" -proxyPort "${PROXY_PORT}" -proxyPassword "${PROXY_PASSWORD}" -localDNS 9.9.9.9 -excludeHosts "${EXCLUDE_HOSTS}" -excludeIPs "${EXCLUDE_IPS}" -logLevel info -tunName outline-tun0 -memprofile mem.prof
 echo '{"action":"resetRouting","parameters":{}}' | socat UNIX-CONNECT:/var/run/outline_controller -

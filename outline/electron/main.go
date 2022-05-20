@@ -49,6 +49,9 @@ var args struct {
 	proxyPort         *int
 	proxyPassword     *string
 	proxyCipher       *string
+	localDNS          *string
+	excludeHosts      *string
+	excludeIPs        *string
 	logLevel          *string
 	checkConnectivity *bool
 	dnsFallback       *bool
@@ -62,12 +65,15 @@ func main() {
 	args.tunAddr = flag.String("tunAddr", "10.0.85.2", "TUN interface IP address")
 	args.tunGw = flag.String("tunGw", "10.0.85.1", "TUN interface gateway")
 	args.tunMask = flag.String("tunMask", "255.255.255.0", "TUN interface network mask; prefixlen for IPv6")
-	args.tunDNS = flag.String("tunDNS", "1.1.1.1,9.9.9.9,208.67.222.222", "Comma-separated list of DNS resolvers for the TUN interface (Windows only)")
+	args.tunDNS = flag.String("tunDNS", "10.0.85.3", "Comma-separated list of DNS resolvers for the TUN interface (Windows only)")
 	args.tunName = flag.String("tunName", "tun0", "TUN interface name")
 	args.proxyHost = flag.String("proxyHost", "", "Shadowsocks proxy hostname or IP address")
 	args.proxyPort = flag.Int("proxyPort", 0, "Shadowsocks proxy port number")
 	args.proxyPassword = flag.String("proxyPassword", "", "Shadowsocks proxy password")
 	args.proxyCipher = flag.String("proxyCipher", "chacha20-ietf-poly1305", "Shadowsocks proxy encryption cipher")
+	args.localDNS = flag.String("localDNS", "", "IP address of the local network or default DNS resolver")
+	args.excludeHosts = flag.String("excludeHosts", "", "Regexp matching hosts to exclude from the proxy")
+	args.excludeIPs = flag.String("excludeIPs", "", "List of comma-separated CIDR subnets to exclude from the proxy")
 	args.logLevel = flag.String("logLevel", "info", "Logging level: debug|info|warn|error|none")
 	args.dnsFallback = flag.Bool("dnsFallback", false, "Enable DNS fallback over TCP (overrides the UDP handler).")
 	args.checkConnectivity = flag.Bool("checkConnectivity", false, "Check the proxy TCP and UDP connectivity and exit.")
@@ -116,7 +122,12 @@ func main() {
 	}
 
 	link := tunnel.NewLink(tunDevice)
-	t, err := outline.NewTunnel(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher, !*args.dnsFallback, link)
+	dns, err := outline.MakeSplitDNS(*args.localDNS, *args.excludeHosts)
+	if err != nil {
+		log.Errorf("Failed to create split DNS: %v", err)
+		os.Exit(oss.IllegalConfiguration)
+	}
+	t, err := outline.NewTunnel(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher, !*args.dnsFallback, dns, *args.excludeIPs, link)
 	if err != nil {
 		log.Errorf("Failed to create Outline tunnel: %v", err)
 		os.Exit(oss.IllegalConfiguration)

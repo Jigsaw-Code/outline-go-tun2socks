@@ -16,11 +16,18 @@ package outline
 
 import (
 	"fmt"
+	"net"
+	"regexp"
+	"strings"
 	"time"
 
 	"gvisor.dev/gvisor/pkg/tcpip/stack"
 
+	"github.com/Jigsaw-Code/outline-go-tun2socks/core"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/dns"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/doh"
 	oss "github.com/Jigsaw-Code/outline-go-tun2socks/shadowsocks"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/split"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 	shadowsocks "github.com/Jigsaw-Code/outline-ss-server/client"
 )
@@ -44,6 +51,23 @@ type outlinetunnel struct {
 	isUDPEnabled bool // Whether the tunnel supports proxying UDP.
 }
 
+func MakeSplitDNS(localDNS string, pattern string) (dns.Transport, error) {
+	localDNSip := net.ParseIP(localDNS)
+	rule, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+	transport, err := doh.NewTransport("https://1.1.1.1/dns-query", nil, nil, nil, nil, nil)
+	if err != nil {
+		return nil, err
+	}
+	return dns.MakeSplitDNS(
+		rule,
+		dns.MakeUDPTransport(localDNSip),
+		transport,
+	), nil
+}
+
 // NewTunnel connects a tunnel to a Shadowsocks proxy server and returns an `outline.Tunnel`.
 //
 // `host` is the IP or domain of the Shadowsocks proxy.
@@ -51,15 +75,59 @@ type outlinetunnel struct {
 // `password` is the password of the Shadowsocks proxy.
 // `cipher` is the encryption cipher used by the Shadowsocks proxy.
 // `isUDPEnabled` indicates if the Shadowsocks proxy and the network support proxying UDP traffic.
+// `fakedns` is the IP address of the virtual DNS server
+// `resolver` is the DNS resolver to use
+// `ipNets` is a comma-separated list of CIDR networks that should be resolved outside of the proxy.
 // `tunWriter` is used to output packets back to the TUN device.  OutlineTunnel.Disconnect() will close `tunWriter`.
-func NewTunnel(host string, port int, password, cipher string, isUDPEnabled bool, endpoint stack.LinkEndpoint) (Tunnel, error) {
+func NewTunnel(host string, port int, password, cipher string, isUDPEnabled bool, resolver dns.Transport, ipNets string, endpoint stack.LinkEndpoint) (Tunnel, error) {
 	client, err := shadowsocks.NewClient(host, port, password, cipher)
 	if err != nil {
 		return nil, fmt.Errorf("Invalid Shadowsocks proxy parameters: %v", err.Error())
 	}
 	t := &outlinetunnel{nil, host, port, password, cipher, isUDPEnabled}
 	dialer := oss.Dialer{Client: client}
-	t.Tunnel, err = tunnel.MakeTunnel(endpoint, dialer, dialer, 30*time.Second)
+
+	dnsRule := split.MakeOneIPRule(net.IP{10, 0, 85, 3})
+
+	var ipNetParsed []net.IPNet
+	if len(ipNets) > 0 {
+		ipNetStrings := strings.Split(ipNets, ",")
+		ipNetParsed := make([]net.IPNet, len(ipNetStrings))
+		for i, s := range ipNetStrings {
+			_, net, err := net.ParseCIDR(s)
+			if err != nil {
+				return nil, err
+			}
+			ipNetParsed[i] = *net
+		}
+	}
+	ipRule := split.MakeIPNetsRule(ipNetParsed)
+
+	dnsDialer := dns.NewTCPDialer()
+	dnsDialer.SetDNS(resolver)
+	tcp := split.NewTCPDialer(
+		dnsRule,
+		dnsDialer,
+		split.NewTCPDialer(
+			ipRule,
+			core.MakeTCPDialer(nil), // FIXME: No escape route!
+			dialer,
+		),
+	)
+
+	dnsListener := dns.NewUDPListener()
+	dnsListener.SetDNS(resolver)
+	udp := split.MakeUDPListener(
+		dnsRule,
+		dnsListener,
+		split.MakeUDPListener(
+			ipRule,
+			core.DefaultUDPListener{}, // FIXME: No escape route!
+			dialer,
+		),
+	)
+
+	t.Tunnel, err = tunnel.MakeTunnel(endpoint, tcp, udp, 30*time.Second)
 	if err != nil {
 		return nil, err
 	}

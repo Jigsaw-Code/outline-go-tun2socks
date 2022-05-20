@@ -15,6 +15,7 @@
 package split
 
 import (
+	"log"
 	"net"
 	"sync/atomic"
 
@@ -157,4 +158,22 @@ func (c *packetConnWrapper) onReverseClosed() {
 	if atomic.LoadInt32(&c.usedDefault) == 0 {
 		c.Close()
 	}
+}
+
+type netsRule struct {
+	nets []net.IPNet
+}
+
+func (r netsRule) Check(ip net.IP, port int) bool {
+	for _, net := range r.nets {
+		if net.Contains(ip) {
+			log.Printf("IP Match: %s", ip.String())
+			return true
+		}
+	}
+	return false
+}
+
+func MakeIPNetsRule(nets []net.IPNet) Rule {
+	return netsRule{nets}
 }
