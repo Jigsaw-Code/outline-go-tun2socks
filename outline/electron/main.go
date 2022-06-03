@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/signal"
 	"runtime/pprof"
@@ -25,6 +26,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Jigsaw-Code/outline-go-tun2socks/dns"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
 	oss "github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
@@ -122,7 +124,9 @@ func main() {
 	}
 
 	link := tunnel.NewLink(tunDevice)
-	dns, err := outline.MakeSplitDNS(*args.localDNS, *args.excludeHosts)
+	localDNSip := net.ParseIP(*args.localDNS)
+	udpDNS := dns.MakeUDPTransport(localDNSip)
+	dns, err := outline.MakeSplitDNS(udpDNS, *args.excludeHosts)
 	if err != nil {
 		log.Errorf("Failed to create split DNS: %v", err)
 		os.Exit(oss.IllegalConfiguration)

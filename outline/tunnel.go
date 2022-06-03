@@ -51,8 +51,7 @@ type outlinetunnel struct {
 	isUDPEnabled bool // Whether the tunnel supports proxying UDP.
 }
 
-func MakeSplitDNS(localDNS string, pattern string) (dns.Transport, error) {
-	localDNSip := net.ParseIP(localDNS)
+func MakeSplitDNS(localDNS dns.Transport, pattern string) (dns.Transport, error) {
 	rule, err := regexp.Compile(pattern)
 	if err != nil {
 		return nil, err
@@ -63,7 +62,7 @@ func MakeSplitDNS(localDNS string, pattern string) (dns.Transport, error) {
 	}
 	return dns.MakeSplitDNS(
 		rule,
-		dns.MakeUDPTransport(localDNSip),
+		localDNS,
 		transport,
 	), nil
 }

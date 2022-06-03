@@ -32,7 +32,7 @@ func MakeSplitDNS(rule Rule, specialDNS, defaultDNS Transport) TransportWithRule
 }
 
 func (d *splitDNS) Query(q []byte) ([]byte, error) {
-	qname, err := getQName(q)
+	qname, _, err := getQuery(q)
 	if err != nil {
 		log.Printf("Couldn't get qname")
 		return nil, err
@@ -40,9 +40,9 @@ func (d *splitDNS) Query(q []byte) ([]byte, error) {
 	d.mu.RLock()
 	rule := d.rule
 	d.mu.RUnlock()
-	log.Printf("Query for %s", string(qname))
-	if rule != nil && rule.Match(qname) {
-		log.Printf("Using special resolution for %s", string(qname))
+	log.Printf("Query for %s", qname.String())
+	if rule != nil && rule.Match(qname.Data[:qname.Length]) {
+		log.Printf("Using special resolution for %s", qname.String())
 		return d.specialDNS.Query(q)
 	}
 	return d.defaultDNS.Query(q)
@@ -58,14 +58,17 @@ func (d *splitDNS) SetRule(rule Rule) {
 	d.mu.Unlock()
 }
 
-func getQName(q []byte) ([]byte, error) {
+func getQuery(q []byte) (qname dnsmessage.Name, qtype dnsmessage.Type, err error) {
+	qtype = dnsmessage.Type(0xFFFF)
 	var msg dnsmessage.Message
-	if err := msg.Unpack(q); err != nil {
-		return nil, err
+	if err = msg.Unpack(q); err != nil {
+		return
 	}
 	if len(msg.Questions) == 0 {
-		return nil, errors.New("no question in query")
+		err = errors.New("no question in query")
+		return
 	}
-	name := msg.Questions[0].Name
-	return name.Data[:name.Length], nil
+	qname = msg.Questions[0].Name
+	qtype = msg.Questions[0].Type
+	return
 }

@@ -22,6 +22,7 @@ import (
 	"runtime/debug"
 	"time"
 
+	"github.com/Jigsaw-Code/outline-go-tun2socks/dns"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 )
@@ -72,14 +73,18 @@ func init() {
 // `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
 // Sets an error if the tunnel fails to connect.
-func ConnectShadowsocksTunnel(tunWriter TunWriter, host string, port int, password, cipher string, isUDPEnabled bool) (OutlineTunnel, error) {
+func ConnectShadowsocksTunnel(tunWriter TunWriter, host string, port int, password, cipher string, isUDPEnabled bool, excludeDomains, excludeRoutes string) (OutlineTunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("Must provide a TunWriter")
 	} else if port <= 0 || port > math.MaxUint16 {
 		return nil, fmt.Errorf("Invalid port number: %v", port)
 	}
+	resolver, err := outline.MakeSplitDNS(dns.MakeLocalTransport(), excludeDomains)
+	if err != nil {
+		return nil, err
+	}
 	endpoint := tunnel.NewLink(tunWriter)
-	outlineTunnel, err := outline.NewTunnel(host, port, password, cipher, isUDPEnabled, endpoint)
+	outlineTunnel, err := outline.NewTunnel(host, port, password, cipher, isUDPEnabled, resolver, excludeRoutes, endpoint)
 	if err != nil {
 		return nil, err
 	}

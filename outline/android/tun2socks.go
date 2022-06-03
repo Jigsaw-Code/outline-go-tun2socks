@@ -19,6 +19,7 @@ import (
 	"math"
 	"runtime/debug"
 
+	"github.com/Jigsaw-Code/outline-go-tun2socks/dns"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
 	"github.com/eycorsican/go-tun2socks/common/log"
 	"gvisor.dev/gvisor/pkg/tcpip/link/fdbased"
@@ -50,7 +51,7 @@ type OutlineTunnel interface {
 //
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectShadowsocksTunnel(fd int, host string, port int, password, cipher string, isUDPEnabled bool) (OutlineTunnel, error) {
+func ConnectShadowsocksTunnel(fd int, host string, port int, password, cipher string, isUDPEnabled bool, excludeDomains, excludeRoutes string) (OutlineTunnel, error) {
 	if port <= 0 || port > math.MaxUint16 {
 		return nil, fmt.Errorf("Invalid port number: %v", port)
 	}
@@ -58,7 +59,11 @@ func ConnectShadowsocksTunnel(fd int, host string, port int, password, cipher st
 	if err != nil {
 		return nil, err
 	}
-	t, err := outline.NewTunnel(host, port, password, cipher, isUDPEnabled, tun)
+	resolver, err := outline.MakeSplitDNS(dns.MakeLocalTransport(), excludeDomains)
+	if err != nil {
+		return nil, err
+	}
+	t, err := outline.NewTunnel(host, port, password, cipher, isUDPEnabled, resolver, excludeRoutes, tun)
 	if err != nil {
 		return nil, err
 	}
