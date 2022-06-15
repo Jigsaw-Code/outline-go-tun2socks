@@ -9,7 +9,8 @@ IMPORT_PATH=github.com/Jigsaw-Code/outline-go-tun2socks
 all: intra android linux apple windows
 
 # Don't strip Android debug symbols so we can upload them to crash reporting tools.
-ANDROID_BUILD_CMD=$(GOMOBILE) bind -a -ldflags '-w' -target=android -tags android -work
+# Add GOBIN to $PATH so `gomobile` can find `gobind`.
+ANDROID_BUILD_CMD=env PATH=$(GOBIN):$(PATH) $(GOMOBILE) bind -a -ldflags '-w' -target=android -tags android -work
 
 intra: $(BUILDDIR)/intra/tun2socks.aar
 
@@ -59,7 +60,7 @@ $(WINDOWS_BUILDDIR)/tun2socks.exe: $(XGO)
 
 $(GOMOBILE): go.mod
 	env GOBIN=$(GOBIN) go install golang.org/x/mobile/cmd/gomobile
-	$(GOMOBILE) init
+	env GOBIN=$(GOBIN) $(GOMOBILE) init
 
 $(XGO): go.mod
 	env GOBIN=$(GOBIN) go install github.com/crazy-max/xgo
