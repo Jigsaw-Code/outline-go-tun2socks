@@ -115,20 +115,24 @@ func tcpbridge(dialer core.TCPDialer, r *tcp.ForwarderRequest) {
 		IP:   []byte(id.LocalAddress),
 		Port: int(id.LocalPort),
 	}
+	log.Printf("Dialing %s", dstAddr.String())
+	toDest, err := dialer.DialTCP(&dstAddr)
+	if err != nil {
+		log.Printf("Proxying failed: %v", err)
+		// TODO: Don't emit a RST if the error was a timeout.
+		r.Complete(true) // RST
+		return
+	}
+
 	var q waiter.Queue
 	endpoint, stackerr := r.CreateEndpoint(&q) // SYNACK
 	if stackerr != nil {
-		log.Printf("Endpoint creation failed for request %v (%s): %v", r, dstAddr.String(), stackerr)
+		log.Printf("Endpoint creation failed for request %+v (%s): %v", r, dstAddr.String(), stackerr)
+		r.Complete(true) // RST
 		return
 	}
 
 	toClient := bridgeConn{endpoint: endpoint, q: &q}
-	toDest, err := dialer.DialTCP(&dstAddr)
-	if err != nil {
-		log.Printf("Proxying failed: %v", err)
-		r.Complete(true)
-		return
-	}
 	r.Complete(false)
 	go toClient.WriteTo(toDest)
 	go io.Copy(&toClient, toDest)

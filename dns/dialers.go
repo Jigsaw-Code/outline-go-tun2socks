@@ -17,6 +17,7 @@ package dns
 import (
 	"errors"
 	"io"
+	"log"
 	"net"
 	"sync"
 	"time"
@@ -39,6 +40,7 @@ func NewTCPDialer() TCPDialer {
 }
 
 func (d *dnsOnlyDialer) DialTCP(target *net.TCPAddr) (core.DoubleStream, error) {
+	log.Printf("Handling DNS-TCP for %s", target.String())
 	if target.Port != 53 {
 		return nil, errors.New("only plain DNS over TCP is supported")
 	}
@@ -91,6 +93,7 @@ func makeDnsOnlyConn(listener *dnsOnlyListener, reverse core.ReverseUDPConn) net
 }
 
 func (c *dnsOnlyConn) WriteTo(pkt []byte, addr net.Addr) (int, error) {
+	log.Printf("Handling DNS-UDP packet for %s", addr.String())
 	udpAddr, err := core.UDPAddr(addr)
 	if err != nil {
 		return 0, err
@@ -112,6 +115,7 @@ func (c *dnsOnlyConn) WriteTo(pkt []byte, addr net.Addr) (int, error) {
 		dns := c.listener.dns.Load()
 		resp, err := dns.Query(pkt)
 		if err != nil {
+			log.Printf("query failed: %v", err)
 			resp = TryServfail(pkt)
 		}
 		if len(resp) > 0 {

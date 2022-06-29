@@ -171,6 +171,7 @@ func (r netsRule) Check(ip net.IP, port int) bool {
 			return true
 		}
 	}
+	log.Printf("No IP match: %s", ip.String())
 	return false
 }
 

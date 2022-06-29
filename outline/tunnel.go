@@ -86,12 +86,13 @@ func NewTunnel(host string, port int, password, cipher string, isUDPEnabled bool
 	t := &outlinetunnel{nil, host, port, password, cipher, isUDPEnabled}
 	dialer := oss.Dialer{Client: client}
 
-	dnsRule := split.MakeOneIPRule(net.IP{10, 0, 85, 3})
+	// Must match VPN_RESOLVER_IP in org/outline/vpn/VpnTunnel.java.
+	dnsRule := split.MakeOneIPRule(net.IP{10, 111, 222, 3})
 
 	var ipNetParsed []net.IPNet
 	if len(ipNets) > 0 {
 		ipNetStrings := strings.Split(ipNets, ",")
-		ipNetParsed := make([]net.IPNet, len(ipNetStrings))
+		ipNetParsed = make([]net.IPNet, len(ipNetStrings))
 		for i, s := range ipNetStrings {
 			_, net, err := net.ParseCIDR(s)
 			if err != nil {
@@ -109,7 +110,7 @@ func NewTunnel(host string, port int, password, cipher string, isUDPEnabled bool
 		dnsDialer,
 		split.NewTCPDialer(
 			ipRule,
-			core.MakeTCPDialer(nil), // FIXME: No escape route!
+			core.MakeTCPDialer(nil),
 			dialer,
 		),
 	)
@@ -121,7 +122,7 @@ func NewTunnel(host string, port int, password, cipher string, isUDPEnabled bool
 		dnsListener,
 		split.MakeUDPListener(
 			ipRule,
-			core.DefaultUDPListener{}, // FIXME: No escape route!
+			core.DefaultUDPListener{&net.ListenConfig{}},
 			dialer,
 		),
 	)

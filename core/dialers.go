@@ -48,6 +48,9 @@ func (d dialer) DialTCP(dst *net.TCPAddr) (DoubleStream, error) {
 }
 
 func MakeTCPDialer(d *net.Dialer) TCPDialer {
+	if d == nil {
+		d = &net.Dialer{}
+	}
 	return dialer{d}
 }
 

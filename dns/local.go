@@ -19,6 +19,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"io"
+	"log"
 	"net"
 	"time"
 
@@ -139,22 +140,15 @@ func (t localTransport) Query(q []byte) ([]byte, error) {
 	if q0.Class != dnsmessage.ClassINET {
 		return nil, errors.New("weird class")
 	}
-	header := dnsmessage.Header{
-		ID:                 msg.ID,
-		Response:           true,
-		OpCode:             msg.OpCode,
-		RecursionAvailable: true,
-		RCode:              dnsmessage.RCodeSuccess,
-	}
-	builder := dnsmessage.NewBuilder(nil, header)
-	if err := builder.StartQuestions(); err != nil {
-		return nil, err
-	}
-	if err := builder.Question(q0); err != nil {
-		return nil, err
-	}
-	if err := builder.StartAnswers(); err != nil {
-		return nil, err
+	resp := dnsmessage.Message{
+		Header: dnsmessage.Header{
+			ID:                 msg.ID,
+			Response:           true,
+			OpCode:             msg.OpCode,
+			RecursionAvailable: true,
+			RCode:              dnsmessage.RCodeSuccess,
+		},
+		Questions: []dnsmessage.Question{q0},
 	}
 	resourceHeader := dnsmessage.ResourceHeader{
 		Name:  q0.Name,
@@ -169,10 +163,14 @@ func (t localTransport) Query(q []byte) ([]byte, error) {
 			return nil, err
 		}
 		for _, ip := range ips {
-			if len(ip) == 4 {
+			ip4 := ip.To4()
+			if ip4 != nil {
 				var resource dnsmessage.AResource
-				copy(resource.A[:], ip[:])
-				builder.AResource(resourceHeader, resource)
+				copy(resource.A[:], ip4[:])
+				resp.Answers = append(resp.Answers, dnsmessage.Resource{
+					Header: resourceHeader,
+					Body:   &resource,
+				})
 			}
 		}
 	case dnsmessage.TypeAAAA:
@@ -181,10 +179,13 @@ func (t localTransport) Query(q []byte) ([]byte, error) {
 			return nil, err
 		}
 		for _, ip := range ips {
-			if len(ip) == 16 {
+			if ip.To4() == nil {
 				var resource dnsmessage.AAAAResource
 				copy(resource.AAAA[:], ip[:])
-				builder.AAAAResource(resourceHeader, resource)
+				resp.Answers = append(resp.Answers, dnsmessage.Resource{
+					Header: resourceHeader,
+					Body:   &resource,
+				})
 			}
 		}
 	case dnsmessage.TypeCNAME:
@@ -202,13 +203,17 @@ func (t localTransport) Query(q []byte) ([]byte, error) {
 	default:
 		return TryServfail(q), errors.New("unsupported qtype")
 	}
-	return builder.Finish()
+	return resp.Pack()
 }
 
 func (t localTransport) GetURL() string {
 	return "local DNS"
 }
 
+// MakeLocalTransport returns a Transport that sends all DNS queries to the
+// local resolver.
+// HACK: The current implementation only supports A and AAAA records, and has
+// many other limitations as well.
 func MakeLocalTransport() Transport {
 	return localTransport{}
 }
