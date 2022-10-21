@@ -49,6 +49,7 @@ var args struct {
 	proxyPort         *int
 	proxyPassword     *string
 	proxyCipher       *string
+	proxyPrefix       *string
 	logLevel          *string
 	checkConnectivity *bool
 	dnsFallback       *bool
@@ -67,6 +68,7 @@ func main() {
 	args.proxyPort = flag.Int("proxyPort", 0, "Shadowsocks proxy port number")
 	args.proxyPassword = flag.String("proxyPassword", "", "Shadowsocks proxy password")
 	args.proxyCipher = flag.String("proxyCipher", "chacha20-ietf-poly1305", "Shadowsocks proxy encryption cipher")
+	args.proxyPrefix = flag.String("proxyPrefix", "", "Shadowsocks connection prefix (unsafe)")
 	args.logLevel = flag.String("logLevel", "info", "Logging level: debug|info|warn|error|none")
 	args.dnsFallback = flag.Bool("dnsFallback", false, "Enable DNS fallback over TCP (overrides the UDP handler).")
 	args.checkConnectivity = flag.Bool("checkConnectivity", false, "Check the proxy TCP and UDP connectivity and exit.")
@@ -116,8 +118,9 @@ func main() {
 	core.RegisterOutputFn(tunDevice.Write)
 
 	// Register TCP and UDP connection handlers
-	core.RegisterTCPConnHandler(
-		shadowsocks.NewTCPHandler(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher))
+	tcpHandler := shadowsocks.NewTCPHandler(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher)
+	tcpHandler.SetTCPPrefix([]byte(*args.proxyPrefix))
+	core.RegisterTCPConnHandler(tcpHandler)
 	if *args.dnsFallback {
 		// UDP connectivity not supported, fall back to DNS over TCP.
 		log.Debugf("Registering DNS fallback UDP handler")

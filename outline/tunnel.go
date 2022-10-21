@@ -45,6 +45,7 @@ type outlinetunnel struct {
 	port         int
 	password     string
 	cipher       string
+	prefix       []byte
 	isUDPEnabled bool // Whether the tunnel supports proxying UDP.
 }
 
@@ -56,7 +57,7 @@ type outlinetunnel struct {
 // `cipher` is the encryption cipher used by the Shadowsocks proxy.
 // `isUDPEnabled` indicates if the Shadowsocks proxy and the network support proxying UDP traffic.
 // `tunWriter` is used to output packets back to the TUN device.  OutlineTunnel.Disconnect() will close `tunWriter`.
-func NewTunnel(host string, port int, password, cipher string, isUDPEnabled bool, tunWriter io.WriteCloser) (Tunnel, error) {
+func NewTunnel(host string, port int, password, cipher string, prefix []byte, isUDPEnabled bool, tunWriter io.WriteCloser) (Tunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("Must provide a TUN writer")
 	}
@@ -69,7 +70,7 @@ func NewTunnel(host string, port int, password, cipher string, isUDPEnabled bool
 	})
 	lwipStack := core.NewLWIPStack()
 	base := tunnel.NewTunnel(tunWriter, lwipStack)
-	t := &outlinetunnel{base, lwipStack, host, port, password, cipher, isUDPEnabled}
+	t := &outlinetunnel{base, lwipStack, host, port, password, cipher, prefix, isUDPEnabled}
 	t.registerConnectionHandlers()
 	return t, nil
 }
@@ -97,6 +98,8 @@ func (t *outlinetunnel) registerConnectionHandlers() {
 	} else {
 		udpHandler = dnsfallback.NewUDPHandler()
 	}
-	core.RegisterTCPConnHandler(oss.NewTCPHandler(t.host, t.port, t.password, t.cipher))
+	tcpHandler := oss.NewTCPHandler(t.host, t.port, t.password, t.cipher)
+	tcpHandler.SetTCPPrefix(t.prefix)
+	core.RegisterTCPConnHandler(tcpHandler)
 	core.RegisterUDPConnHandler(udpHandler)
 }

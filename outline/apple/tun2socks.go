@@ -60,11 +60,11 @@ func init() {
 // `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
 // Sets an error if the tunnel fails to connect.
-func ConnectShadowsocksTunnel(tunWriter TunWriter, host string, port int, password, cipher string, isUDPEnabled bool) (OutlineTunnel, error) {
+func ConnectShadowsocksTunnel(tunWriter TunWriter, host string, port int, password, cipher string, prefix []byte, isUDPEnabled bool) (OutlineTunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("Must provide a TunWriter")
 	} else if port <= 0 || port > math.MaxUint16 {
 		return nil, fmt.Errorf("Invalid port number: %v", port)
 	}
-	return outline.NewTunnel(host, port, password, cipher, isUDPEnabled, tunWriter)
+	return outline.NewTunnel(host, port, password, cipher, prefix, isUDPEnabled, tunWriter)
 }

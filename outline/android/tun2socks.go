@@ -50,7 +50,7 @@ type OutlineTunnel interface {
 //
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectShadowsocksTunnel(fd int, host string, port int, password, cipher string, isUDPEnabled bool) (OutlineTunnel, error) {
+func ConnectShadowsocksTunnel(fd int, host string, port int, password, cipher string, prefix []byte, isUDPEnabled bool) (OutlineTunnel, error) {
 	if port <= 0 || port > math.MaxUint16 {
 		return nil, fmt.Errorf("Invalid port number: %v", port)
 	}
@@ -58,7 +58,7 @@ func ConnectShadowsocksTunnel(fd int, host string, port int, password, cipher st
 	if err != nil {
 		return nil, err
 	}
-	t, err := outline.NewTunnel(host, port, password, cipher, isUDPEnabled, tun)
+	t, err := outline.NewTunnel(host, port, password, cipher, prefix, isUDPEnabled, tun)
 	if err != nil {
 		return nil, err
 	}
