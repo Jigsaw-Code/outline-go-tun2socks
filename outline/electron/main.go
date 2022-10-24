@@ -26,6 +26,7 @@ import (
 
 	oss "github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/shadowsocks"
+	"github.com/Jigsaw-Code/outline-ss-server/client"
 	"github.com/eycorsican/go-tun2socks/common/log"
 	_ "github.com/eycorsican/go-tun2socks/common/log/simple" // Register a simple logger.
 	"github.com/eycorsican/go-tun2socks/core"
@@ -115,16 +116,20 @@ func main() {
 	// Output packets to TUN device
 	core.RegisterOutputFn(tunDevice.Write)
 
+	ssclient, err := client.NewClient(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher)
+	if err != nil {
+		log.Errorf("Failed to construct Shadowsocks client: %v", err)
+		os.Exit(oss.IllegalConfiguration)
+	}
+
 	// Register TCP and UDP connection handlers
-	core.RegisterTCPConnHandler(
-		shadowsocks.NewTCPHandler(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher))
+	core.RegisterTCPConnHandler(shadowsocks.NewTCPHandler(ssclient))
 	if *args.dnsFallback {
 		// UDP connectivity not supported, fall back to DNS over TCP.
 		log.Debugf("Registering DNS fallback UDP handler")
 		core.RegisterUDPConnHandler(dnsfallback.NewUDPHandler())
 	} else {
-		core.RegisterUDPConnHandler(
-			shadowsocks.NewUDPHandler(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher, udpTimeout))
+		core.RegisterUDPConnHandler(shadowsocks.NewUDPHandler(ssclient, udpTimeout))
 	}
 
 	// Configure LWIP stack to receive input data from the TUN device

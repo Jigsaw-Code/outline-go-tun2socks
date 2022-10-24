@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
+	"github.com/Jigsaw-Code/outline-ss-server/client"
 )
 
 // OutlineTunnel embeds the tun2socks.Tunnel interface so it gets exported by gobind.
@@ -66,5 +67,10 @@ func ConnectShadowsocksTunnel(tunWriter TunWriter, host string, port int, passwo
 	} else if port <= 0 || port > math.MaxUint16 {
 		return nil, fmt.Errorf("Invalid port number: %v", port)
 	}
-	return outline.NewTunnel(host, port, password, cipher, isUDPEnabled, tunWriter)
+	ssclient, err := client.NewClient(host, port, password, cipher)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct Shadowsocks client: %v", err)
+	}
+
+	return outline.NewTunnel(ssclient, isUDPEnabled, tunWriter)
 }

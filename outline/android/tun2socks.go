@@ -21,6 +21,7 @@ import (
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
+	"github.com/Jigsaw-Code/outline-ss-server/client"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
@@ -58,7 +59,11 @@ func ConnectShadowsocksTunnel(fd int, host string, port int, password, cipher st
 	if err != nil {
 		return nil, err
 	}
-	t, err := outline.NewTunnel(host, port, password, cipher, isUDPEnabled, tun)
+	ssclient, err := client.NewClient(host, port, password, cipher)
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct Shadowsocks client: %v", err)
+	}
+	t, err := outline.NewTunnel(ssclient, isUDPEnabled, tun)
 	if err != nil {
 		return nil, err
 	}
