@@ -100,8 +100,24 @@ func main() {
 		os.Exit(oss.IllegalConfiguration)
 	}
 
+	ssclient, err := client.NewClient(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher)
+	if err != nil {
+		log.Errorf("Failed to construct Shadowsocks client: %v", err)
+		os.Exit(oss.IllegalConfiguration)
+	}
+
+	prefix, err := url.PathUnescape(*args.proxyPrefix)
+	if err != nil {
+		log.Errorf("\"%s\" could not be URI-decoded", *args.proxyPrefix)
+		os.Exit(oss.IllegalConfiguration)
+	}
+	if len(prefix) > 0 {
+		log.Debugf("Using salt prefix: %s", prefix)
+		ssclient.SetTCPSaltGenerator(client.NewPrefixSaltGenerator([]byte(prefix)))
+	}
+
 	if *args.checkConnectivity {
-		connErrCode, err := oss.CheckConnectivity(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher)
+		connErrCode, err := oss.CheckConnectivity(*args.proxyHost, *args.proxyPort, ssclient)
 		log.Debugf("Connectivity checks error code: %v", connErrCode)
 		if err != nil {
 			log.Errorf("Failed to perform connectivity checks: %v", err)
@@ -119,17 +135,6 @@ func main() {
 	// Output packets to TUN device
 	core.RegisterOutputFn(tunDevice.Write)
 
-	ssclient, err := client.NewClient(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher)
-	if err != nil {
-		log.Errorf("Failed to construct Shadowsocks client: %v", err)
-		os.Exit(oss.IllegalConfiguration)
-	}
-	prefixBytes, err := url.PathUnescape(*args.proxyPrefix)
-	if err != nil {
-		log.Errorf("\"%s\" could not be URI-decoded", *args.proxyPrefix)
-		os.Exit(oss.IllegalConfiguration)
-	}
-	ssclient.SetTCPSaltGenerator(client.NewPrefixSaltGenerator([]byte(prefixBytes)))
 	// Register TCP and UDP connection handlers
 	core.RegisterTCPConnHandler(shadowsocks.NewTCPHandler(ssclient))
 	if *args.dnsFallback {
