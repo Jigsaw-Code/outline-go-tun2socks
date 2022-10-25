@@ -18,6 +18,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -50,6 +51,7 @@ var args struct {
 	proxyPort         *int
 	proxyPassword     *string
 	proxyCipher       *string
+	proxyPrefix       *string
 	logLevel          *string
 	checkConnectivity *bool
 	dnsFallback       *bool
@@ -68,6 +70,7 @@ func main() {
 	args.proxyPort = flag.Int("proxyPort", 0, "Shadowsocks proxy port number")
 	args.proxyPassword = flag.String("proxyPassword", "", "Shadowsocks proxy password")
 	args.proxyCipher = flag.String("proxyCipher", "chacha20-ietf-poly1305", "Shadowsocks proxy encryption cipher")
+	args.proxyPrefix = flag.String("proxyPrefix", "", "Shadowsocks connection prefix, URI-encoded (unsafe)")
 	args.logLevel = flag.String("logLevel", "info", "Logging level: debug|info|warn|error|none")
 	args.dnsFallback = flag.Bool("dnsFallback", false, "Enable DNS fallback over TCP (overrides the UDP handler).")
 	args.checkConnectivity = flag.Bool("checkConnectivity", false, "Check the proxy TCP and UDP connectivity and exit.")
@@ -121,7 +124,12 @@ func main() {
 		log.Errorf("Failed to construct Shadowsocks client: %v", err)
 		os.Exit(oss.IllegalConfiguration)
 	}
-
+	prefixBytes, err := url.PathUnescape(*args.proxyPrefix)
+	if err != nil {
+		log.Errorf("\"%s\" could not be URI-decoded", *args.proxyPrefix)
+		os.Exit(oss.IllegalConfiguration)
+	}
+	ssclient.SetTCPSaltGenerator(client.NewPrefixSaltGenerator([]byte(prefixBytes)))
 	// Register TCP and UDP connection handlers
 	core.RegisterTCPConnHandler(shadowsocks.NewTCPHandler(ssclient))
 	if *args.dnsFallback {

@@ -58,10 +58,11 @@ func init() {
 // `port` is the port of the Shadowsocks proxy server.
 // `password` is the password of the Shadowsocks proxy.
 // `cipher` is the encryption cipher the Shadowsocks proxy.
+// `prefix` is the salt prefix to use for TCP connections (optional, use with care).
 // `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
 // Sets an error if the tunnel fails to connect.
-func ConnectShadowsocksTunnel(tunWriter TunWriter, host string, port int, password, cipher string, isUDPEnabled bool) (OutlineTunnel, error) {
+func ConnectShadowsocksTunnel(tunWriter TunWriter, host string, port int, password, cipher string, prefix []byte, isUDPEnabled bool) (OutlineTunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("Must provide a TunWriter")
 	} else if port <= 0 || port > math.MaxUint16 {
@@ -71,6 +72,6 @@ func ConnectShadowsocksTunnel(tunWriter TunWriter, host string, port int, passwo
 	if err != nil {
 		return nil, fmt.Errorf("failed to construct Shadowsocks client: %v", err)
 	}
-
+	ssclient.SetTCPSaltGenerator(client.NewPrefixSaltGenerator(prefix))
 	return outline.NewTunnel(ssclient, isUDPEnabled, tunWriter)
 }

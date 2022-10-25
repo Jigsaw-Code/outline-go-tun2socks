@@ -7,8 +7,9 @@ import (
 	"testing"
 	"time"
 
-	onet "github.com/Jigsaw-Code/outline-ss-server/net"
 	shadowsocks "github.com/Jigsaw-Code/outline-ss-server/client"
+	onet "github.com/Jigsaw-Code/outline-ss-server/net"
+	ss "github.com/Jigsaw-Code/outline-ss-server/shadowsocks"
 )
 
 func TestCheckUDPConnectivityWithDNS_Success(t *testing.T) {
@@ -78,6 +79,8 @@ func (c *fakeSSClient) ListenUDP(laddr *net.UDPAddr) (net.PacketConn, error) {
 	// The UDP check should fail if any of the failure conditions are true since it is a superset of the others.
 	failRead := c.failAuthentication || c.failUDP || c.failReachability
 	return &fakePacketConn{PacketConn: conn, failRead: failRead}, nil
+}
+func (c *fakeSSClient) SetTCPSaltGenerator(salter ss.SaltGenerator) {
 }
 
 // Fake PacketConn that fails `ReadFrom` calls when `failRead` is true.
