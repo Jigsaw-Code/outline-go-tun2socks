@@ -20,16 +20,9 @@ type udpHandler struct {
 
 // NewUDPHandler returns a Shadowsocks UDP connection handler.
 //
-// `host` is the hostname of the Shadowsocks proxy server.
-// `port` is the port of the Shadowsocks proxy.
-// `password` is password used to authenticate to the proxy.
-// `cipher` is the encryption cipher of the Shadowsocks proxy.
+// `client` provides the Shadowsocks functionality.
 // `timeout` is the UDP read and write timeout.
-func NewUDPHandler(host string, port int, password, cipher string, timeout time.Duration) core.UDPConnHandler {
-	client, err := shadowsocks.NewClient(host, port, password, cipher)
-	if err != nil {
-		return nil
-	}
+func NewUDPHandler(client shadowsocks.Client, timeout time.Duration) core.UDPConnHandler {
 	return &udpHandler{
 		client:  client,
 		timeout: timeout,
