@@ -16,14 +16,12 @@ package tun2socks
 
 import (
 	"errors"
-	"fmt"
 	"io"
-	"math"
 	"runtime/debug"
 	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
-	"github.com/Jigsaw-Code/outline-ss-server/client"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
 )
 
 // OutlineTunnel embeds the tun2socks.Tunnel interface so it gets exported by gobind.
@@ -54,24 +52,15 @@ func init() {
 // Returns an OutlineTunnel instance that should be used to input packets to the tunnel.
 //
 // `tunWriter` is used to output packets to the TUN (VPN).
-// `host` is  IP address of the Shadowsocks proxy server.
-// `port` is the port of the Shadowsocks proxy server.
-// `password` is the password of the Shadowsocks proxy.
-// `cipher` is the encryption cipher the Shadowsocks proxy.
-// `prefix` is the salt prefix to use for TCP connections (optional, use with care).
+// `client` is the Shadowsocks client (created by [shadowsocks.NewClient]).
 // `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
 // Sets an error if the tunnel fails to connect.
-func ConnectShadowsocksTunnel(tunWriter TunWriter, host string, port int, password, cipher string, prefix []byte, isUDPEnabled bool) (OutlineTunnel, error) {
+func ConnectShadowsocksTunnel(tunWriter TunWriter, client *shadowsocks.Client, isUDPEnabled bool) (OutlineTunnel, error) {
 	if tunWriter == nil {
-		return nil, errors.New("Must provide a TunWriter")
-	} else if port <= 0 || port > math.MaxUint16 {
-		return nil, fmt.Errorf("Invalid port number: %v", port)
+		return nil, errors.New("must provide a TunWriter")
+	} else if client == nil {
+		return nil, errors.New("must provide a client")
 	}
-	ssclient, err := client.NewClient(host, port, password, cipher)
-	if err != nil {
-		return nil, fmt.Errorf("failed to construct Shadowsocks client: %v", err)
-	}
-	ssclient.SetTCPSaltGenerator(client.NewPrefixSaltGenerator(prefix))
-	return outline.NewTunnel(ssclient, isUDPEnabled, tunWriter)
+	return outline.NewTunnel(client, isUDPEnabled, tunWriter)
 }

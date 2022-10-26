@@ -27,7 +27,6 @@ import (
 
 	oss "github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/shadowsocks"
-	"github.com/Jigsaw-Code/outline-ss-server/client"
 	"github.com/eycorsican/go-tun2socks/common/log"
 	_ "github.com/eycorsican/go-tun2socks/common/log/simple" // Register a simple logger.
 	"github.com/eycorsican/go-tun2socks/core"
@@ -100,24 +99,26 @@ func main() {
 		os.Exit(oss.IllegalConfiguration)
 	}
 
-	ssclient, err := client.NewClient(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher)
-	if err != nil {
-		log.Errorf("Failed to construct Shadowsocks client: %v", err)
-		os.Exit(oss.IllegalConfiguration)
-	}
-
 	prefix, err := url.PathUnescape(*args.proxyPrefix)
 	if err != nil {
 		log.Errorf("\"%s\" could not be URI-decoded", *args.proxyPrefix)
 		os.Exit(oss.IllegalConfiguration)
 	}
-	if len(prefix) > 0 {
-		log.Debugf("Using salt prefix: %s", prefix)
-		ssclient.SetTCPSaltGenerator(client.NewPrefixSaltGenerator([]byte(prefix)))
+	config := oss.Config{
+		Host:       *args.proxyHost,
+		Port:       *args.proxyPort,
+		Password:   *args.proxyPassword,
+		CipherName: *args.proxyCipher,
+		Prefix:     []byte(prefix),
+	}
+	client, err := oss.NewClient(&config)
+	if err != nil {
+		log.Errorf("Failed to construct Shadowsocks client: %v", err)
+		os.Exit(oss.IllegalConfiguration)
 	}
 
 	if *args.checkConnectivity {
-		connErrCode, err := oss.CheckConnectivity(*args.proxyHost, *args.proxyPort, ssclient)
+		connErrCode, err := oss.CheckConnectivity(client)
 		log.Debugf("Connectivity checks error code: %v", connErrCode)
 		if err != nil {
 			log.Errorf("Failed to perform connectivity checks: %v", err)
@@ -136,13 +137,13 @@ func main() {
 	core.RegisterOutputFn(tunDevice.Write)
 
 	// Register TCP and UDP connection handlers
-	core.RegisterTCPConnHandler(shadowsocks.NewTCPHandler(ssclient))
+	core.RegisterTCPConnHandler(shadowsocks.NewTCPHandler(client))
 	if *args.dnsFallback {
 		// UDP connectivity not supported, fall back to DNS over TCP.
 		log.Debugf("Registering DNS fallback UDP handler")
 		core.RegisterUDPConnHandler(dnsfallback.NewUDPHandler())
 	} else {
-		core.RegisterUDPConnHandler(shadowsocks.NewUDPHandler(ssclient, udpTimeout))
+		core.RegisterUDPConnHandler(shadowsocks.NewUDPHandler(client, udpTimeout))
 	}
 
 	// Configure LWIP stack to receive input data from the TUN device
