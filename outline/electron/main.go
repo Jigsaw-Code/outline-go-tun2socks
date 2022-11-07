@@ -18,7 +18,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -69,7 +68,7 @@ func main() {
 	args.proxyPort = flag.Int("proxyPort", 0, "Shadowsocks proxy port number")
 	args.proxyPassword = flag.String("proxyPassword", "", "Shadowsocks proxy password")
 	args.proxyCipher = flag.String("proxyCipher", "chacha20-ietf-poly1305", "Shadowsocks proxy encryption cipher")
-	args.proxyPrefix = flag.String("proxyPrefix", "", "Shadowsocks connection prefix, URI-encoded (unsafe)")
+	args.proxyPrefix = flag.String("proxyPrefix", "", "Shadowsocks connection prefix, UTF8-encoded (unsafe)")
 	args.logLevel = flag.String("logLevel", "info", "Logging level: debug|info|warn|error|none")
 	args.dnsFallback = flag.Bool("dnsFallback", false, "Enable DNS fallback over TCP (overrides the UDP handler).")
 	args.checkConnectivity = flag.Bool("checkConnectivity", false, "Check the proxy TCP and UDP connectivity and exit.")
@@ -99,18 +98,25 @@ func main() {
 		os.Exit(oss.IllegalConfiguration)
 	}
 
-	prefix, err := url.PathUnescape(*args.proxyPrefix)
-	if err != nil {
-		log.Errorf("\"%s\" could not be URI-decoded", *args.proxyPrefix)
-		os.Exit(oss.IllegalConfiguration)
-	}
 	config := oss.Config{
 		Host:       *args.proxyHost,
 		Port:       *args.proxyPort,
 		Password:   *args.proxyPassword,
 		CipherName: *args.proxyCipher,
-		Prefix:     []byte(prefix),
 	}
+
+	// The prefix is an 8-bit-clean byte sequence, stored in the codepoint
+	// values of a unicode string, which arrives here encoded in UTF-8.
+	prefixRunes := []rune(*args.proxyPrefix)
+	config.Prefix = make([]byte, len(prefixRunes))
+	for i, r := range prefixRunes {
+		if (r & 0xFF) != r {
+			log.Errorf("Character out of range: %r", r)
+			os.Exit(oss.IllegalConfiguration)
+		}
+		config.Prefix[i] = byte(r)
+	}
+
 	client, err := oss.NewClient(&config)
 	if err != nil {
 		log.Errorf("Failed to construct Shadowsocks client: %v", err)
