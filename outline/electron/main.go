@@ -18,7 +18,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/url"
 	"os"
 	"os/signal"
 	"strings"
@@ -27,7 +26,6 @@ import (
 
 	oss "github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/shadowsocks"
-	"github.com/Jigsaw-Code/outline-ss-server/client"
 	"github.com/eycorsican/go-tun2socks/common/log"
 	_ "github.com/eycorsican/go-tun2socks/common/log/simple" // Register a simple logger.
 	"github.com/eycorsican/go-tun2socks/core"
@@ -70,7 +68,7 @@ func main() {
 	args.proxyPort = flag.Int("proxyPort", 0, "Shadowsocks proxy port number")
 	args.proxyPassword = flag.String("proxyPassword", "", "Shadowsocks proxy password")
 	args.proxyCipher = flag.String("proxyCipher", "chacha20-ietf-poly1305", "Shadowsocks proxy encryption cipher")
-	args.proxyPrefix = flag.String("proxyPrefix", "", "Shadowsocks connection prefix, URI-encoded (unsafe)")
+	args.proxyPrefix = flag.String("proxyPrefix", "", "Shadowsocks connection prefix, UTF8-encoded (unsafe)")
 	args.logLevel = flag.String("logLevel", "info", "Logging level: debug|info|warn|error|none")
 	args.dnsFallback = flag.Bool("dnsFallback", false, "Enable DNS fallback over TCP (overrides the UDP handler).")
 	args.checkConnectivity = flag.Bool("checkConnectivity", false, "Check the proxy TCP and UDP connectivity and exit.")
@@ -100,8 +98,33 @@ func main() {
 		os.Exit(oss.IllegalConfiguration)
 	}
 
+	config := oss.Config{
+		Host:       *args.proxyHost,
+		Port:       *args.proxyPort,
+		Password:   *args.proxyPassword,
+		CipherName: *args.proxyCipher,
+	}
+
+	// The prefix is an 8-bit-clean byte sequence, stored in the codepoint
+	// values of a unicode string, which arrives here encoded in UTF-8.
+	prefixRunes := []rune(*args.proxyPrefix)
+	config.Prefix = make([]byte, len(prefixRunes))
+	for i, r := range prefixRunes {
+		if (r & 0xFF) != r {
+			log.Errorf("Character out of range: %r", r)
+			os.Exit(oss.IllegalConfiguration)
+		}
+		config.Prefix[i] = byte(r)
+	}
+
+	client, err := oss.NewClient(&config)
+	if err != nil {
+		log.Errorf("Failed to construct Shadowsocks client: %v", err)
+		os.Exit(oss.IllegalConfiguration)
+	}
+
 	if *args.checkConnectivity {
-		connErrCode, err := oss.CheckConnectivity(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher)
+		connErrCode, err := oss.CheckConnectivity(client)
 		log.Debugf("Connectivity checks error code: %v", connErrCode)
 		if err != nil {
 			log.Errorf("Failed to perform connectivity checks: %v", err)
@@ -119,25 +142,14 @@ func main() {
 	// Output packets to TUN device
 	core.RegisterOutputFn(tunDevice.Write)
 
-	ssclient, err := client.NewClient(*args.proxyHost, *args.proxyPort, *args.proxyPassword, *args.proxyCipher)
-	if err != nil {
-		log.Errorf("Failed to construct Shadowsocks client: %v", err)
-		os.Exit(oss.IllegalConfiguration)
-	}
-	prefixBytes, err := url.PathUnescape(*args.proxyPrefix)
-	if err != nil {
-		log.Errorf("\"%s\" could not be URI-decoded", *args.proxyPrefix)
-		os.Exit(oss.IllegalConfiguration)
-	}
-	ssclient.SetTCPSaltGenerator(client.NewPrefixSaltGenerator([]byte(prefixBytes)))
 	// Register TCP and UDP connection handlers
-	core.RegisterTCPConnHandler(shadowsocks.NewTCPHandler(ssclient))
+	core.RegisterTCPConnHandler(shadowsocks.NewTCPHandler(client))
 	if *args.dnsFallback {
 		// UDP connectivity not supported, fall back to DNS over TCP.
 		log.Debugf("Registering DNS fallback UDP handler")
 		core.RegisterUDPConnHandler(dnsfallback.NewUDPHandler())
 	} else {
-		core.RegisterUDPConnHandler(shadowsocks.NewUDPHandler(ssclient, udpTimeout))
+		core.RegisterUDPConnHandler(shadowsocks.NewUDPHandler(client, udpTimeout))
 	}
 
 	// Configure LWIP stack to receive input data from the TUN device

@@ -15,13 +15,11 @@
 package tun2socks
 
 import (
-	"fmt"
-	"math"
 	"runtime/debug"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
-	"github.com/Jigsaw-Code/outline-ss-server/client"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
@@ -40,32 +38,20 @@ type OutlineTunnel interface {
 // Returns an OutlineTunnel instance and does *not* take ownership of the TUN file descriptor; the
 // caller is responsible for closing after OutlineTunnel disconnects.
 //
-// `fd` is the TUN device.  The OutlineTunnel acquires an additional reference to it, which
+//   - `fd` is the TUN device.  The OutlineTunnel acquires an additional reference to it, which
 //     is released by OutlineTunnel.Disconnect(), so the caller must close `fd` _and_ call
 //     Disconnect() in order to close the TUN device.
-// `host` is  IP address of the Shadowsocks proxy server.
-// `port` is the port of the Shadowsocks proxy server.
-// `password` is the password of the Shadowsocks proxy.
-// `cipher` is the encryption cipher the Shadowsocks proxy.
-// `prefix` is the salt prefix to use for TCP connections (optional, use with care).
-// `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
+//   - `client` is the Shadowsocks client (created by [shadowsocks.NewClient]).
+//   - `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectShadowsocksTunnel(fd int, host string, port int, password, cipher string, prefix []byte, isUDPEnabled bool) (OutlineTunnel, error) {
-	if port <= 0 || port > math.MaxUint16 {
-		return nil, fmt.Errorf("Invalid port number: %v", port)
-	}
+func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled bool) (OutlineTunnel, error) {
 	tun, err := tunnel.MakeTunFile(fd)
 	if err != nil {
 		return nil, err
 	}
-	ssclient, err := client.NewClient(host, port, password, cipher)
-	if err != nil {
-		return nil, fmt.Errorf("failed to construct Shadowsocks client: %v", err)
-	}
-	ssclient.SetTCPSaltGenerator(client.NewPrefixSaltGenerator(prefix))
-	t, err := outline.NewTunnel(ssclient, isUDPEnabled, tun)
+	t, err := outline.NewTunnel(client, isUDPEnabled, tun)
 	if err != nil {
 		return nil, err
 	}
