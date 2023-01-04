@@ -13,7 +13,7 @@ import (
 const (
 	tcpTimeoutMs        = udpTimeoutMs * udpMaxRetryAttempts
 	udpTimeoutMs        = 1000
-	udpMaxRetryAttempts = 5
+	udpMaxRetryAttempts = 10
 	bufferLength        = 512
 )
 

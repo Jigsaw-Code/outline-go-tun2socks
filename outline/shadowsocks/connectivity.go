@@ -40,14 +40,11 @@ func CheckConnectivity(client *Client) (int, error) {
 	}()
 	// Check whether UDP is supported
 	udpErr := oss.CheckUDPConnectivityWithDNS(client, shadowsocks.NewAddr("1.1.1.1:53", "udp"))
-	if udpErr == nil {
-		// The UDP connectvity check is a superset of the TCP checks. If the other tests fail,
-		// assume it's due to intermittent network conditions and declare success anyway.
-		return NoError, nil
-	}
 	tcpErr := <-tcpChan
 	if tcpErr == nil {
-		// The TCP connectivity checks succeeded, which means UDP is not supported.
+		if udpErr == nil {
+			return NoError, nil
+		}
 		return UDPConnectivity, nil
 	}
 	_, isReachabilityError := tcpErr.(*oss.ReachabilityError)
