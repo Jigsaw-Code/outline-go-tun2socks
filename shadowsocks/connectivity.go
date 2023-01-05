@@ -11,8 +11,8 @@ import (
 
 // TODO: make these values configurable by exposing a struct with the connectivity methods.
 const (
-	tcpTimeoutMs        = udpTimeoutMs * udpMaxRetryAttempts
-	udpTimeoutMs        = 1000
+	tcpTimeout          = 10 * time.Second
+	udpTimeout          = 1 * time.Second
 	udpMaxRetryAttempts = 5
 	bufferLength        = 512
 )
@@ -38,7 +38,7 @@ func CheckUDPConnectivityWithDNS(client shadowsocks.Client, resolverAddr net.Add
 	defer conn.Close()
 	buf := make([]byte, bufferLength)
 	for attempt := 0; attempt < udpMaxRetryAttempts; attempt++ {
-		conn.SetDeadline(time.Now().Add(time.Millisecond * udpTimeoutMs))
+		conn.SetDeadline(time.Now().Add(udpTimeout))
 		_, err := conn.WriteTo(getDNSRequest(), resolverAddr)
 		if err != nil {
 			continue
@@ -73,7 +73,7 @@ func CheckTCPConnectivityWithHTTP(client shadowsocks.Client, targetURL string) e
 		return &ReachabilityError{err}
 	}
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(time.Millisecond * tcpTimeoutMs))
+	conn.SetDeadline(time.Now().Add(tcpTimeout))
 	err = req.Write(conn)
 	if err != nil {
 		return &AuthenticationError{err}
