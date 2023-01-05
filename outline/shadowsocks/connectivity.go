@@ -1,6 +1,7 @@
 package shadowsocks
 
 import (
+	"errors"
 	"net"
 	"strconv"
 	"time"
@@ -33,25 +34,25 @@ const reachabilityTimeout = 10 * time.Second
 // error code to return accounting for transient network failures.
 // Returns an error if an unexpected error ocurrs.
 func CheckConnectivity(client *Client) (int, error) {
-	tcpChan := make(chan error)
-	// Check whether the proxy is reachable and that the client is able to authenticate to the proxy
+	// Start asynchronous UDP support check.
+	udpChan := make(chan error)
 	go func() {
-		tcpChan <- oss.CheckTCPConnectivityWithHTTP(client, "http://example.com")
+		udpChan <- oss.CheckUDPConnectivityWithDNS(client, shadowsocks.NewAddr("1.1.1.1:53", "udp"))
 	}()
-	// Check whether UDP is supported
-	udpErr := oss.CheckUDPConnectivityWithDNS(client, shadowsocks.NewAddr("1.1.1.1:53", "udp"))
-	tcpErr := <-tcpChan
+	// Check whether the proxy is reachable and that the client is able to authenticate to the proxy
+	tcpErr := oss.CheckTCPConnectivityWithHTTP(client, "http://example.com")
 	if tcpErr == nil {
+		udpErr := <-udpChan
 		if udpErr == nil {
 			return NoError, nil
 		}
 		return UDPConnectivity, nil
 	}
-	_, isReachabilityError := tcpErr.(*oss.ReachabilityError)
-	_, isAuthError := tcpErr.(*oss.AuthenticationError)
-	if isAuthError {
+	var authErr *oss.AuthenticationError
+	var reachabilityErr *oss.ReachabilityError
+	if errors.As(tcpErr, &authErr) {
 		return AuthenticationFailure, nil
-	} else if isReachabilityError {
+	} else if errors.As(tcpErr, &reachabilityErr) {
 		return Unreachable, nil
 	}
 	// The error is not related to the connectivity checks.
