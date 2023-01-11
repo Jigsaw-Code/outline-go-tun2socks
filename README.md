@@ -46,9 +46,15 @@ unzip build/android/tun2socks.aar 'jni/*' -d build/android
 
 ### Build
 ```
-make clean && make apple
+make clean && make apple && make catalyst
 ```
-This will create `build/apple/Tun2socks.xcframework`.
+This will create `build/apple/Tun2socks.xcframework` and `build/catalyst/Tun2socks.xcframework`. Because we want to continue supporting older iOS versions (pre-14.0), these frameworks need to be build separately then merged. To merge, do the following:
+
+1. Run `open build/apple/Tun2socks.xcframework/Info.plist && open build/catalyst/Tun2socks.xcframework/Info.plist` 
+2. Expand the `AvailableLibraries` dropdown in both files, and copy `Item 0` from the Catalyst file into the Apple file (insert it into the existing array). There should now be four items in the Apple plist AvailableLibraries field. Save the files and close.
+3. Run `cp -r build/catalyst/Tun2socks.xcframework/ios-arm64_x86_64-maccatalyst build/apple/Tun2socks.xcframework/`.
+4. If you run `ls build/apple/Tun2socks.xcframework/` there should now be five items: `Info.plist`, `ios-arm64`, `ios-arm64_x86_64-maccatalyst`, `macos-arm64_x86_64`, and `ios-arm64_x86_64-simulator`.
+5. If needed, zip the apple directory: `cd build && zip -r apple.zip apple`
 
 ## Linux and Windows
 
