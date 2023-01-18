@@ -30,7 +30,7 @@ jobs:
       run: go test -v -race -bench=. -benchtime=100ms ./...
 
   linux:
-    name: Linux Build
+    name: Electron Build
     runs-on: ubuntu-22.04
     timeout-minutes: 10
     needs: test
@@ -38,19 +38,10 @@ jobs:
       - name:
         uses: actions/checkout@v3
 
-      - name: Build
+      - name: Build for Linux
         run: make linux
 
-  windows:
-    name: Windows Build
-    runs-on: ubuntu-22.04
-    timeout-minutes: 30
-    needs: test
-    steps:
-      - name:
-        uses: actions/checkout@v3
-
-      - name: Build
+      - name: Build for Windows
         run: make windows
 
   apple:
