@@ -31,7 +31,7 @@ apple: $(BUILDDIR)/apple/Tun2socks.xcframework
 $(BUILDDIR)/apple/Tun2socks.xcframework: $(GOMOBILE)
   # MACOSX_DEPLOYMENT_TARGET and -iosversion should match what outline-client supports.
   # TODO(fortuna): -s strips symbols and is obsolete. Why are we using it?
-	export MACOSX_DEPLOYMENT_TARGET=10.14; $(GOBIND) -iosversion=9.0 -target=ios,iossimulator,macos,maccatalyst -o $@ -ldflags '-s -w' -bundleid org.outline.tun2socks $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks
+	export MACOSX_DEPLOYMENT_TARGET=10.14; $(GOBIND) -iosversion=9.0 -target=ios,iossimulator,macos -o $@ -ldflags '-s -w' -bundleid org.outline.tun2socks $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks
 
 
 XGO=$(GOBIN)/xgo

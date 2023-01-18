@@ -1,0 +1,96 @@
+name: Build and Test
+
+concurrency:
+  group: ${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+on:
+  pull_request:
+    types:
+      - opened
+      - synchronize
+  push:
+    branches:
+      - master
+
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    steps:
+
+    - name:
+      uses: actions/checkout@v3
+
+    - name: Build
+      run: go build -v ./...
+
+    - name: Test
+      run: go test -v -race -bench=. -benchtime=100ms ./...
+
+  linux:
+    name: Linux Build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    needs: test
+    steps:
+      - name:
+        uses: actions/checkout@v3
+
+      - name: Build
+        run: make linux
+
+  windows:
+    name: Windows Build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 30
+    needs: test
+    steps:
+      - name:
+        uses: actions/checkout@v3
+
+      - name: Build
+        run: make windows
+
+  apple:
+    name: Apple Build
+    runs-on: macos-12
+    timeout-minutes: 30
+    needs: test
+    env:
+      # Prevent gomobile from interacting with the Android NDK.  The runner's
+      # default NDK is not compatible with gomobile, but we aren't trying
+      # to build for Android anyway.
+      ANDROID_HOME: ""
+      ANDROID_NDK_HOME: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set XCode Version
+        run: sudo xcode-select -switch /Applications/Xcode_13.3.app
+
+      - name: Build for Apple platforms
+      # Change the Go version to 1.18.  (Default is 1.17.)
+        run: |
+          env PATH="${GOROOT_1_18_X64}:${PATH}"
+          make apple
+
+  android:
+    name: Android Build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 10
+    needs: test
+    env:
+      # Let gomobile choose its preferred NDK version
+      ANDROID_NDK_HOME: ""
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Build Outline Library
+        run: make android
+
+      - name: Build Intra Library
+        run: make intra
