@@ -40,16 +40,21 @@ const (
 )
 
 var args struct {
-	tunAddr           *string
-	tunGw             *string
-	tunMask           *string
-	tunName           *string
-	tunDNS            *string
-	proxyHost         *string
-	proxyPort         *int
-	proxyPassword     *string
-	proxyCipher       *string
-	proxyPrefix       *string
+	tunAddr *string
+	tunGw   *string
+	tunMask *string
+	tunName *string
+	tunDNS  *string
+
+	// Deprecated: Use proxyConfig instead.
+	proxyHost     *string
+	proxyPort     *int
+	proxyPassword *string
+	proxyCipher   *string
+	proxyPrefix   *string
+
+	proxyConfig *string
+
 	logLevel          *string
 	checkConnectivity *bool
 	dnsFallback       *bool
@@ -69,6 +74,7 @@ func main() {
 	args.proxyPassword = flag.String("proxyPassword", "", "Shadowsocks proxy password")
 	args.proxyCipher = flag.String("proxyCipher", "chacha20-ietf-poly1305", "Shadowsocks proxy encryption cipher")
 	args.proxyPrefix = flag.String("proxyPrefix", "", "Shadowsocks connection prefix, UTF8-encoded (unsafe)")
+	args.proxyConfig = flag.String("proxyConfig", "", "A JSON object containing the proxy config, UTF8-encoded")
 	args.logLevel = flag.String("logLevel", "info", "Logging level: debug|info|warn|error|none")
 	args.dnsFallback = flag.Bool("dnsFallback", false, "Enable DNS fallback over TCP (overrides the UDP handler).")
 	args.checkConnectivity = flag.Bool("checkConnectivity", false, "Check the proxy TCP and UDP connectivity and exit.")
@@ -98,26 +104,25 @@ func main() {
 		os.Exit(oss.IllegalConfiguration)
 	}
 
-	config := oss.Config{
-		Host:       *args.proxyHost,
-		Port:       *args.proxyPort,
-		Password:   *args.proxyPassword,
-		CipherName: *args.proxyCipher,
-	}
-
-	// The prefix is an 8-bit-clean byte sequence, stored in the codepoint
-	// values of a unicode string, which arrives here encoded in UTF-8.
-	prefixRunes := []rune(*args.proxyPrefix)
-	config.Prefix = make([]byte, len(prefixRunes))
-	for i, r := range prefixRunes {
-		if (r & 0xFF) != r {
-			log.Errorf("Character out of range: %r", r)
+	var config *oss.Config
+	if args.proxyConfig != nil {
+		var err error
+		config, err = oss.NewConfig(*args.proxyConfig)
+		if err != nil {
+			log.Errorf("Invalid proxy config object: %s", err)
 			os.Exit(oss.IllegalConfiguration)
 		}
-		config.Prefix[i] = byte(r)
+	} else {
+		config = &oss.Config{
+			Host:     *args.proxyHost,
+			Port:     *args.proxyPort,
+			Password: *args.proxyPassword,
+			Method:   *args.proxyCipher,
+			Prefix:   *args.proxyPrefix,
+		}
 	}
 
-	client, err := oss.NewClient(&config)
+	client, err := oss.NewClient(config)
 	if err != nil {
 		log.Errorf("Failed to construct Shadowsocks client: %v", err)
 		os.Exit(oss.IllegalConfiguration)
