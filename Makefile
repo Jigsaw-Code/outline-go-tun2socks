@@ -42,22 +42,32 @@ ELECTRON_PATH=$(IMPORT_PATH)/outline/electron
 
 LINUX_BUILDDIR=$(BUILDDIR)/linux
 
-linux: $(LINUX_BUILDDIR)/tun2socks
+linux: $(LINUX_BUILDDIR)/tun2socks $(LINUX_BUILDDIR)/libtun2socks.so
 
 $(LINUX_BUILDDIR)/tun2socks: $(XGO)
 	mkdir -p "$(LINUX_BUILDDIR)"
 	$(XGO) -ldflags $(XGO_LDFLAGS) --targets=linux/amd64 -dest "$(LINUX_BUILDDIR)" "$(ELECTRON_PATH)"
 	mv "$(LINUX_BUILDDIR)/electron-linux-amd64" "$@"
 
+$(LINUX_BUILDDIR)/libtun2socks.so: $(XGO)
+	mkdir -p "$(LINUX_BUILDDIR)"
+	$(XGO) -buildmode c-shared -ldflags $(XGO_LDFLAGS) --targets=linux/amd64 -dest "$(LINUX_BUILDDIR)" "$(ELECTRON_PATH)"
+	mv "$(LINUX_BUILDDIR)/electron-linux-amd64.so" "$@"
+
 
 WINDOWS_BUILDDIR=$(BUILDDIR)/windows
 
-windows: $(WINDOWS_BUILDDIR)/tun2socks.exe
+windows: $(WINDOWS_BUILDDIR)/tun2socks.exe $(WINDOWS_BUILDDIR)/tun2socks.dll
 
 $(WINDOWS_BUILDDIR)/tun2socks.exe: $(XGO)
 	mkdir -p "$(WINDOWS_BUILDDIR)"
 	$(XGO) -ldflags $(XGO_LDFLAGS) --targets=windows/386 -dest "$(WINDOWS_BUILDDIR)" "$(ELECTRON_PATH)"
 	mv "$(WINDOWS_BUILDDIR)/electron-windows-386.exe" "$@"
+
+$(WINDOWS_BUILDDIR)/tun2socks.dll: $(XGO)
+	mkdir -p "$(WINDOWS_BUILDDIR)"
+	$(XGO) -buildmode c-shared -ldflags $(XGO_LDFLAGS) --targets=windows/386 -dest "$(WINDOWS_BUILDDIR)" "$(ELECTRON_PATH)"
+	mv "$(WINDOWS_BUILDDIR)/electron-windows-386.dll" "$@"
 
 
 $(GOMOBILE): go.mod
