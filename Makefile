@@ -6,9 +6,9 @@ GOMOBILE=$(GOBIN)/gomobile
 GOBIND=env PATH="$(GOBIN):$(PATH)" "$(GOMOBILE)" bind
 IMPORT_PATH=github.com/Jigsaw-Code/outline-go-tun2socks
 
-.PHONY: android apple linux windows intra clean clean-all
+.PHONY: android apple apple_catalyst linux windows intra clean clean-all
 
-all: intra android linux apple windows
+all: intra android linux apple windows apple_catalyst
 
 # Don't strip Android debug symbols so we can upload them to crash reporting tools.
 ANDROID_BUILD_CMD=$(GOBIND) -a -ldflags '-w' -target=android -tags android -work
@@ -25,10 +25,16 @@ $(BUILDDIR)/android/tun2socks.aar: $(GOMOBILE)
 	mkdir -p "$(BUILDDIR)/android"
 	$(ANDROID_BUILD_CMD) -o "$@" $(IMPORT_PATH)/outline/android $(IMPORT_PATH)/outline/shadowsocks
 
-
 apple: $(BUILDDIR)/apple/Tun2socks.xcframework
 
 $(BUILDDIR)/apple/Tun2socks.xcframework: $(GOMOBILE)
+  # MACOSX_DEPLOYMENT_TARGET and -iosversion should match what outline-client supports.
+  # TODO(fortuna): -s strips symbols and is obsolete. Why are we using it?
+	export MACOSX_DEPLOYMENT_TARGET=10.14; $(GOBIND) -iosversion=11.0 -target=ios,iossimulator,macos -o $@ -ldflags '-s -w' -bundleid org.outline.tun2socks $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks
+	
+apple_catalyst: $(BUILDDIR)/apple_catalyst/Tun2socks.xcframework
+
+$(BUILDDIR)/apple_catalyst/Tun2socks.xcframework: $(GOMOBILE)
   # MACOSX_DEPLOYMENT_TARGET and -iosversion should match what outline-client supports.
   # TODO(fortuna): -s strips symbols and is obsolete. Why are we using it?
 	export MACOSX_DEPLOYMENT_TARGET=10.14; $(GOBIND) -iosversion=13.1 -target=ios,iossimulator,macos,maccatalyst -o $@ -ldflags '-s -w' -bundleid org.outline.tun2socks $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks
