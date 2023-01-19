@@ -62,11 +62,16 @@ jobs:
       - name: Set XCode Version
         run: sudo xcode-select -switch /Applications/Xcode_13.3.app
 
+      - name: Change Go version to 1.18
+        uses: actions/setup-go@v3
+        with:
+          go-version: '^1.18'
+
       - name: Build for Apple platforms
-      # Change the Go version to 1.18.  (Default is 1.17.)
-        run: |
-          env PATH="${GOROOT_1_18_X64}:${PATH}"
-          make apple
+        run: make apple
+        
+      - name: Build future Apple library
+        run: make apple_future
 
   android:
     name: Android Build
