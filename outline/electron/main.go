@@ -15,6 +15,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -89,40 +90,25 @@ func main() {
 
 	setLogLevel(*args.logLevel)
 
-	// Validate proxy flags
-	if *args.proxyHost == "" {
-		log.Errorf("Must provide a Shadowsocks proxy host name or IP address")
-		os.Exit(oss.IllegalConfiguration)
-	} else if *args.proxyPort <= 0 || *args.proxyPort > 65535 {
-		log.Errorf("Must provide a valid Shadowsocks proxy port [1:65535]")
-		os.Exit(oss.IllegalConfiguration)
-	} else if *args.proxyPassword == "" {
-		log.Errorf("Must provide a Shadowsocks proxy password")
-		os.Exit(oss.IllegalConfiguration)
-	} else if *args.proxyCipher == "" {
-		log.Errorf("Must provide a Shadowsocks proxy encryption cipher")
-		os.Exit(oss.IllegalConfiguration)
-	}
+	config := *args.proxyConfig
+	if len(config) == 0 {
+		// Construct a JSON object from the deprecated flags.
+		configMap := make(map[string]interface{})
+		configMap["host"] = args.proxyHost
+		configMap["port"] = args.proxyPort
+		configMap["method"] = args.proxyCipher
+		configMap["password"] = args.proxyPassword
+		configMap["prefix"] = args.proxyPrefix
 
-	var config *oss.Config
-	if args.proxyConfig != nil {
-		var err error
-		config, err = oss.NewConfig(*args.proxyConfig)
+		configBytes, err := json.Marshal(configMap)
 		if err != nil {
-			log.Errorf("Invalid proxy config object: %s", err)
+			log.Errorf("Invalid proxy configuration flags: %v", err)
 			os.Exit(oss.IllegalConfiguration)
 		}
-	} else {
-		config = &oss.Config{
-			Host:     *args.proxyHost,
-			Port:     *args.proxyPort,
-			Password: *args.proxyPassword,
-			Method:   *args.proxyCipher,
-			Prefix:   *args.proxyPrefix,
-		}
+		config = string(configBytes)
 	}
 
-	client, err := oss.NewClient(config)
+	client, err := oss.MakeClient(config)
 	if err != nil {
 		log.Errorf("Failed to construct Shadowsocks client: %v", err)
 		os.Exit(oss.IllegalConfiguration)

@@ -24,13 +24,21 @@ import (
 )
 
 // Config represents a shadowsocks server configuration.
-// Exported via gobind.  Must match ShadowsocksSessionConfig interface in Typescript.
+// Exported via gobind.
 //
-// TODO: Make this private, so platform code is not exposed to
-// Shadowsocks internals.
+// Deprecated: Please use MakeClient().
 type Config struct {
+	Host       string
+	Port       int
+	Password   string
+	CipherName string
+	Prefix     []byte
+}
+
+// Must match the ShadowsocksSessionConfig interface in Typescript.
+type configJSON struct {
 	Host     string
-	Port     int
+	Port     uint16
 	Password string
 	Method   string
 	Prefix   string
@@ -42,9 +50,9 @@ type Client struct {
 	client.Client
 }
 
+// The prefix is an 8-bit-clean byte sequence, stored in the codepoint
+// values of a unicode string, which arrives here encoded in UTF-8.
 func extractPrefixBytes(prefixUtf8 string) ([]byte, error) {
-	// The prefix is an 8-bit-clean byte sequence, stored in the codepoint
-	// values of a unicode string, which arrives here encoded in UTF-8.
 	prefixRunes := []rune(prefixUtf8)
 	prefixBytes := make([]byte, len(prefixRunes))
 	for i, r := range prefixRunes {
@@ -57,32 +65,51 @@ func extractPrefixBytes(prefixUtf8 string) ([]byte, error) {
 }
 
 // NewClient provides a gobind-compatible wrapper for [client.NewClient].
+//
+// Deprecated: Please use MakeClient().
 func NewClient(config *Config) (*Client, error) {
-	c, err := client.NewClient(config.Host, config.Port, config.Password, config.Method)
+	c, err := client.NewClient(config.Host, config.Port, config.Password, config.CipherName)
 	if err != nil {
 		return nil, err
 	}
 	if len(config.Prefix) > 0 {
 		log.Debugf("Using salt prefix: %s", string(config.Prefix))
-		prefixBytes, err := extractPrefixBytes(config.Prefix)
-		if err != nil {
-			return nil, fmt.Errorf("prefix parsing failed: %w", err)
-		}
-		c.SetTCPSaltGenerator(client.NewPrefixSaltGenerator(prefixBytes))
+		c.SetTCPSaltGenerator(client.NewPrefixSaltGenerator(config.Prefix))
 	}
 
 	return &Client{c}, nil
 }
 
-// NewConfig converts a UTF-8 JSON string into a Config struct.
-// A string is used instead of
-func NewConfig(s string) (*Config, error) {
-	var config Config
-	if err := json.Unmarshal([]byte(s), &config); err != nil {
+// newConfig converts a UTF-8 JSON string into a Config struct.
+// A string is used to ensure that configs can be passed through gobind.
+func newConfig(s string) (*Config, error) {
+	var parsed configJSON
+	if err := json.Unmarshal([]byte(s), &parsed); err != nil {
 		return nil, err
 	}
-	if len(config.Host) == 0 || config.Port == 0 || len(config.Method) == 0 || len(config.Password) == 0 {
+	if len(parsed.Host) == 0 || parsed.Port == 0 || len(parsed.Method) == 0 || len(parsed.Password) == 0 {
 		return nil, errors.New("missing mandatory field")
 	}
+	config := Config{
+		Host:       parsed.Host,
+		Port:       int(parsed.Port),
+		CipherName: parsed.Method,
+		Password:   parsed.Password,
+	}
+	prefixBytes, err := extractPrefixBytes(parsed.Prefix)
+	if err != nil {
+		return nil, fmt.Errorf("prefix parsing failed: %w", err)
+	}
+	config.Prefix = prefixBytes
 	return &config, nil
+}
+
+// MakeClient provides a gobind-compatible wrapper for [client.NewClient].
+// [configStr] contains a JSON configuration object.
+func MakeClient(configStr string) (*Client, error) {
+	config, err := newConfig(configStr)
+	if err != nil {
+		return nil, err
+	}
+	return NewClient(config)
 }
