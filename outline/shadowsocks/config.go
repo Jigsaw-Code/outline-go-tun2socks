@@ -13,7 +13,7 @@
 // limitations under the License.
 
 // Deprecated: Please use
-// [github.com/Jigsaw-Code/outline-go-tun2socks/outline/client] instead.
+// [github.com/Jigsaw-Code/outline-go-tun2socks/outline/proxy] instead.
 package shadowsocks
 
 import (

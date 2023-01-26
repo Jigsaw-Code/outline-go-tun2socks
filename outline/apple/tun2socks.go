@@ -72,7 +72,7 @@ func ConnectShadowsocksTunnel(tunWriter TunWriter, client *shadowsocks.Client, i
 // Returns an OutlineTunnel instance that should be used to input packets to the tunnel.
 //
 // `tunWriter` is used to output packets to the TUN (VPN).
-// `client` is the proxy client (created by [client.NewClient]).
+// `client` is the proxy client (created by [proxy.NewClient]).
 // `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
 // Sets an error if the tunnel fails to connect.

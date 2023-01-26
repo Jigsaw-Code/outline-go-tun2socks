@@ -60,7 +60,7 @@ func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled b
 //   - `fd` is the TUN device.  The OutlineTunnel acquires an additional reference to it, which
 //     is released by OutlineTunnel.Disconnect(), so the caller must close `fd` _and_ call
 //     Disconnect() in order to close the TUN device.
-//   - `client` is the proxy client (created by [client.NewClient]).
+//   - `client` is the proxy client (created by [proxy.NewClient]).
 //   - `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to

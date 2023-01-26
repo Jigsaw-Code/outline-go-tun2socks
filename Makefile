@@ -4,11 +4,12 @@ GOBIN=$(CURDIR)/bin
 GOMOBILE=$(GOBIN)/gomobile
 # Add GOBIN to $PATH so `gomobile` can find `gobind`.
 GOBIND=env PATH="$(GOBIN):$(PATH)" "$(GOMOBILE)" bind
-IMPORT_PATH=github.com/Jigsaw-Code/outline-go-tun2socks
+IMPORT_HOST=github.com
+IMPORT_PATH=$(IMPORT_HOST)/Jigsaw-Code/outline-go-tun2socks
 
-.PHONY: android apple linux windows intra clean clean-all
+.PHONY: android apple apple_future linux windows intra clean clean-all
 
-all: intra android linux apple windows
+all: intra android linux apple windows apple_future
 
 # Don't strip Android debug symbols so we can upload them to crash reporting tools.
 ANDROID_BUILD_CMD=$(GOBIND) -a -ldflags '-w' -target=android -tags android -work
@@ -22,10 +23,9 @@ $(BUILDDIR)/intra/tun2socks.aar: $(GOMOBILE)
 android: $(BUILDDIR)/android/tun2socks.aar
 
 $(BUILDDIR)/android/tun2socks.aar: $(GOMOBILE)
-	mkdir -p "$(BUILDDIR)/android"	
+	mkdir -p "$(BUILDDIR)/android"
   # TODO: Don't expose /outline/shadowsocks to the platform code
 	$(ANDROID_BUILD_CMD) -o "$@" $(IMPORT_PATH)/outline/android $(IMPORT_PATH)/outline/shadowsocks $(IMPORT_PATH)/outline/proxy
-
 
 apple: $(BUILDDIR)/apple/Tun2socks.xcframework
 
@@ -33,13 +33,18 @@ $(BUILDDIR)/apple/Tun2socks.xcframework: $(GOMOBILE)
   # MACOSX_DEPLOYMENT_TARGET and -iosversion should match what outline-client supports.
   # TODO(fortuna): -s strips symbols and is obsolete. Why are we using it?
   # TODO: Don't expose /outline/shadowsocks to the platform code
-	export MACOSX_DEPLOYMENT_TARGET=10.14; $(GOBIND) -iosversion=9.0 -target=ios,iossimulator,macos -o $@ -ldflags '-s -w' -bundleid org.outline.tun2socks $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks  $(IMPORT_PATH)/outline/proxy
+	export MACOSX_DEPLOYMENT_TARGET=10.14; $(GOBIND) -iosversion=11.0 -target=ios,iossimulator,macos -o $@ -ldflags '-s -w' -bundleid org.outline.tun2socks $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks $(IMPORT_PATH)/outline/proxy
+	
+apple_future: $(BUILDDIR)/apple_future/Tun2socks.xcframework
+
+$(BUILDDIR)/apple_future/Tun2socks.xcframework: $(GOMOBILE)
+	$(GOBIND) -iosversion=13.1 -target=ios,iossimulator,maccatalyst -o $@ -ldflags '-s -w' -bundleid org.outline.tun2socks $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks $(IMPORT_PATH)/outline/proxy
 
 
 XGO=$(GOBIN)/xgo
 TUN2SOCKS_VERSION=v1.16.11
 XGO_LDFLAGS='-s -w -X main.version=$(TUN2SOCKS_VERSION)'
-ELECTRON_PATH=$(IMPORT_PATH)/outline/electron
+ELECTRON_PKG=outline/electron
 
 
 LINUX_BUILDDIR=$(BUILDDIR)/linux
@@ -47,9 +52,10 @@ LINUX_BUILDDIR=$(BUILDDIR)/linux
 linux: $(LINUX_BUILDDIR)/tun2socks
 
 $(LINUX_BUILDDIR)/tun2socks: $(XGO)
-	mkdir -p "$(LINUX_BUILDDIR)"
-	$(XGO) -ldflags $(XGO_LDFLAGS) --targets=linux/amd64 -dest "$(LINUX_BUILDDIR)" "$(ELECTRON_PATH)"
-	mv "$(LINUX_BUILDDIR)/electron-linux-amd64" "$@"
+	mkdir -p "$(LINUX_BUILDDIR)/$(IMPORT_PATH)"
+	$(XGO) -ldflags $(XGO_LDFLAGS) --targets=linux/amd64 -dest "$(LINUX_BUILDDIR)" -pkg $(ELECTRON_PKG) .
+	mv "$(LINUX_BUILDDIR)/$(IMPORT_PATH)-linux-amd64" "$@"
+	rm -r "$(LINUX_BUILDDIR)/$(IMPORT_HOST)"
 
 
 WINDOWS_BUILDDIR=$(BUILDDIR)/windows
@@ -57,9 +63,10 @@ WINDOWS_BUILDDIR=$(BUILDDIR)/windows
 windows: $(WINDOWS_BUILDDIR)/tun2socks.exe
 
 $(WINDOWS_BUILDDIR)/tun2socks.exe: $(XGO)
-	mkdir -p "$(WINDOWS_BUILDDIR)"
-	$(XGO) -ldflags $(XGO_LDFLAGS) --targets=windows/386 -dest "$(WINDOWS_BUILDDIR)" "$(ELECTRON_PATH)"
-	mv "$(WINDOWS_BUILDDIR)/electron-windows-386.exe" "$@"
+	mkdir -p "$(WINDOWS_BUILDDIR)/$(IMPORT_PATH)"
+	$(XGO) -ldflags $(XGO_LDFLAGS) --targets=windows/386 -dest "$(WINDOWS_BUILDDIR)" -pkg $(ELECTRON_PKG) .
+	mv "$(WINDOWS_BUILDDIR)/$(IMPORT_PATH)-windows-386.exe" "$@"
+	rm -r "$(WINDOWS_BUILDDIR)/$(IMPORT_HOST)"
 
 
 $(GOMOBILE): go.mod
