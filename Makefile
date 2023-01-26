@@ -22,8 +22,9 @@ $(BUILDDIR)/intra/tun2socks.aar: $(GOMOBILE)
 android: $(BUILDDIR)/android/tun2socks.aar
 
 $(BUILDDIR)/android/tun2socks.aar: $(GOMOBILE)
-	mkdir -p "$(BUILDDIR)/android"
-	$(ANDROID_BUILD_CMD) -o "$@" $(IMPORT_PATH)/outline/android $(IMPORT_PATH)/outline/shadowsocks
+	mkdir -p "$(BUILDDIR)/android"	
+  # TODO: Don't expose /outline/shadowsocks to the platform code
+	$(ANDROID_BUILD_CMD) -o "$@" $(IMPORT_PATH)/outline/android $(IMPORT_PATH)/outline/shadowsocks $(IMPORT_PATH)/outline/proxy
 
 
 apple: $(BUILDDIR)/apple/Tun2socks.xcframework
@@ -31,7 +32,8 @@ apple: $(BUILDDIR)/apple/Tun2socks.xcframework
 $(BUILDDIR)/apple/Tun2socks.xcframework: $(GOMOBILE)
   # MACOSX_DEPLOYMENT_TARGET and -iosversion should match what outline-client supports.
   # TODO(fortuna): -s strips symbols and is obsolete. Why are we using it?
-	export MACOSX_DEPLOYMENT_TARGET=10.14; $(GOBIND) -iosversion=9.0 -target=ios,iossimulator,macos -o $@ -ldflags '-s -w' -bundleid org.outline.tun2socks $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks
+  # TODO: Don't expose /outline/shadowsocks to the platform code
+	export MACOSX_DEPLOYMENT_TARGET=10.14; $(GOBIND) -iosversion=9.0 -target=ios,iossimulator,macos -o $@ -ldflags '-s -w' -bundleid org.outline.tun2socks $(IMPORT_PATH)/outline/apple $(IMPORT_PATH)/outline/shadowsocks  $(IMPORT_PATH)/outline/proxy
 
 
 XGO=$(GOBIN)/xgo

@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/proxy"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
 )
 
@@ -56,7 +57,26 @@ func init() {
 // `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
 // Sets an error if the tunnel fails to connect.
+//
+// Deprecated: Use ConnectProxyTunnel instead.
 func ConnectShadowsocksTunnel(tunWriter TunWriter, client *shadowsocks.Client, isUDPEnabled bool) (OutlineTunnel, error) {
+	if tunWriter == nil {
+		return nil, errors.New("must provide a TunWriter")
+	} else if client == nil {
+		return nil, errors.New("must provide a client")
+	}
+	return outline.NewTunnel(client, isUDPEnabled, tunWriter)
+}
+
+// ConnectTunnel reads packets from a TUN device and routes it to a proxy server.
+// Returns an OutlineTunnel instance that should be used to input packets to the tunnel.
+//
+// `tunWriter` is used to output packets to the TUN (VPN).
+// `client` is the proxy client (created by [client.NewClient]).
+// `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
+//
+// Sets an error if the tunnel fails to connect.
+func ConnectProxyTunnel(tunWriter TunWriter, client *proxy.Client, isUDPEnabled bool) (OutlineTunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("must provide a TunWriter")
 	} else if client == nil {
