@@ -6,14 +6,14 @@ import (
 	"sync"
 	"time"
 
-	onet "github.com/Jigsaw-Code/outline-ss-server/net"
+	shadowsocks "github.com/Jigsaw-Code/outline-ss-server/client"
 	"github.com/eycorsican/go-tun2socks/core"
 )
 
 type udpHandler struct {
 	sync.Mutex
 
-	dialer  onet.PacketDialer
+	client  shadowsocks.Client
 	timeout time.Duration
 	conns   map[core.UDPConn]net.PacketConn
 }
@@ -22,16 +22,16 @@ type udpHandler struct {
 //
 // `client` provides the Shadowsocks functionality.
 // `timeout` is the UDP read and write timeout.
-func NewUDPHandler(dialer onet.PacketDialer, timeout time.Duration) core.UDPConnHandler {
+func NewUDPHandler(client shadowsocks.Client, timeout time.Duration) core.UDPConnHandler {
 	return &udpHandler{
-		dialer:  dialer,
+		client:  client,
 		timeout: timeout,
 		conns:   make(map[core.UDPConn]net.PacketConn, 8),
 	}
 }
 
 func (h *udpHandler) Connect(conn core.UDPConn, target *net.UDPAddr) error {
-	proxyConn, err := h.dialer.ListenPacket()
+	proxyConn, err := h.client.ListenUDP(nil)
 	if err != nil {
 		return err
 	}

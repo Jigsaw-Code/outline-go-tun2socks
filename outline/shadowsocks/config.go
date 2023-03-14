@@ -16,7 +16,6 @@ package shadowsocks
 
 import (
 	"github.com/Jigsaw-Code/outline-ss-server/client"
-	onet "github.com/Jigsaw-Code/outline-ss-server/net"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
@@ -33,8 +32,7 @@ type Config struct {
 // Client provides a transparent container for [client.Client] that
 // is exportable (as an opaque object) via gobind.
 type Client struct {
-	onet.StreamDialer
-	onet.PacketDialer
+	client.Client
 }
 
 // NewClient provides a gobind-compatible wrapper for [client.NewClient].
@@ -48,5 +46,5 @@ func NewClient(config *Config) (*Client, error) {
 		c.SetTCPSaltGenerator(client.NewPrefixSaltGenerator(config.Prefix))
 	}
 
-	return &Client{c, c}, nil
+	return &Client{c}, nil
 }

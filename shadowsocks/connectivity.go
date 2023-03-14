@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	onet "github.com/Jigsaw-Code/outline-ss-server/net"
+	shadowsocks "github.com/Jigsaw-Code/outline-ss-server/client"
 )
 
 // TODO: make these values configurable by exposing a struct with the connectivity methods.
@@ -30,8 +30,8 @@ type ReachabilityError struct {
 // CheckUDPConnectivityWithDNS determines whether the Shadowsocks proxy represented by `client` and
 // the network support UDP traffic by issuing a DNS query though a resolver at `resolverAddr`.
 // Returns nil on success or an error on failure.
-func CheckUDPConnectivityWithDNS(client onet.PacketDialer, resolverAddr net.Addr) error {
-	conn, err := client.ListenPacket()
+func CheckUDPConnectivityWithDNS(client shadowsocks.Client, resolverAddr net.Addr) error {
+	conn, err := client.ListenUDP(nil)
 	if err != nil {
 		return err
 	}
@@ -59,7 +59,7 @@ func CheckUDPConnectivityWithDNS(client onet.PacketDialer, resolverAddr net.Addr
 // client's authentication credentials by performing an HTTP HEAD request to `targetURL`, which must
 // be of the form: http://[host](:[port])(/[path]). Returns nil on success, error if `targetURL` is
 // invalid, AuthenticationError or ReachabilityError on connectivity failure.
-func CheckTCPConnectivityWithHTTP(dialer onet.StreamDialer, targetURL string) error {
+func CheckTCPConnectivityWithHTTP(client shadowsocks.Client, targetURL string) error {
 	req, err := http.NewRequest("HEAD", targetURL, nil)
 	if err != nil {
 		return err
@@ -68,7 +68,7 @@ func CheckTCPConnectivityWithHTTP(dialer onet.StreamDialer, targetURL string) er
 	if !hasPort(targetAddr) {
 		targetAddr = net.JoinHostPort(targetAddr, "80")
 	}
-	conn, err := dialer.Dial(targetAddr)
+	conn, err := client.DialTCP(nil, targetAddr)
 	if err != nil {
 		return &ReachabilityError{err}
 	}

@@ -102,7 +102,7 @@ func makePinnedCertVerifier(trustedCertFingerprint []byte) certVerifier {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		if len(rawCerts) == 0 {
 			return x509.CertificateInvalidError{
-				Cert: nil, Reason: x509.NotAuthorizedToSign, Detail: "Did not receive TLS certificate"}
+				nil, x509.NotAuthorizedToSign, "Did not receive TLS certificate"}
 		}
 		// Compute the sha256 digest of the whole DER-encoded certificate.
 		fingerprint := sha256.Sum256(rawCerts[0])
@@ -110,6 +110,6 @@ func makePinnedCertVerifier(trustedCertFingerprint []byte) certVerifier {
 			return nil
 		}
 		return x509.CertificateInvalidError{
-			Cert: nil, Reason: x509.NotAuthorizedToSign, Detail: "Failed to verify TLS certificate"}
+			nil, x509.NotAuthorizedToSign, "Failed to verify TLS certificate"}
 	}
 }
