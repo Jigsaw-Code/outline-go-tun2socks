@@ -62,5 +62,5 @@ func ConnectShadowsocksTunnel(tunWriter TunWriter, client *shadowsocks.Client, i
 	} else if client == nil {
 		return nil, errors.New("must provide a client")
 	}
-	return outline.NewTunnel(client, isUDPEnabled, tunWriter)
+	return outline.NewTunnel(client, client, isUDPEnabled, tunWriter)
 }
