@@ -3,22 +3,21 @@ package shadowsocks
 import (
 	"net"
 
-	shadowsocks "github.com/Jigsaw-Code/outline-ss-server/client"
 	onet "github.com/Jigsaw-Code/outline-ss-server/net"
 	"github.com/eycorsican/go-tun2socks/core"
 )
 
 type tcpHandler struct {
-	client shadowsocks.Client
+	dialer onet.StreamDialer
 }
 
 // NewTCPHandler returns a Shadowsocks TCP connection handler.
-func NewTCPHandler(client shadowsocks.Client) core.TCPConnHandler {
+func NewTCPHandler(client onet.StreamDialer) core.TCPConnHandler {
 	return &tcpHandler{client}
 }
 
 func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
-	proxyConn, err := h.client.DialTCP(nil, target.String())
+	proxyConn, err := h.dialer.Dial(target.String())
 	if err != nil {
 		return err
 	}

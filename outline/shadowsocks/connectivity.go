@@ -7,7 +7,6 @@ import (
 	"time"
 
 	oss "github.com/Jigsaw-Code/outline-go-tun2socks/shadowsocks"
-	shadowsocks "github.com/Jigsaw-Code/outline-ss-server/client"
 )
 
 // Outline error codes. Must be kept in sync with definitions in outline-client/cordova-plugin-outline/outlinePlugin.js
@@ -37,7 +36,8 @@ func CheckConnectivity(client *Client) (int, error) {
 	// Start asynchronous UDP support check.
 	udpChan := make(chan error)
 	go func() {
-		udpChan <- oss.CheckUDPConnectivityWithDNS(client, shadowsocks.NewAddr("1.1.1.1:53", "udp"))
+		resolverAddr := &net.UDPAddr{IP: net.ParseIP("1.1.1.1"), Port: 53}
+		udpChan <- oss.CheckUDPConnectivityWithDNS(client, resolverAddr)
 	}()
 	// Check whether the proxy is reachable and that the client is able to authenticate to the proxy
 	tcpErr := oss.CheckTCPConnectivityWithHTTP(client, "http://example.com")

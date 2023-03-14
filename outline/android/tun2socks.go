@@ -51,7 +51,7 @@ func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled b
 	if err != nil {
 		return nil, err
 	}
-	t, err := outline.NewTunnel(client, isUDPEnabled, tun)
+	t, err := outline.NewTunnel(client, client, isUDPEnabled, tun)
 	if err != nil {
 		return nil, err
 	}
