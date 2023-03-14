@@ -43,7 +43,7 @@ type outlinetunnel struct {
 	tunnel.Tunnel
 	lwipStack    core.LWIPStack
 	streamDialer onet.StreamDialer
-	packetDialer onet.PacketDialer
+	packetDialer onet.PacketListener
 	isUDPEnabled bool // Whether the tunnel supports proxying UDP.
 }
 
@@ -55,7 +55,7 @@ type outlinetunnel struct {
 // `cipher` is the encryption cipher used by the Shadowsocks proxy.
 // `isUDPEnabled` indicates if the Shadowsocks proxy and the network support proxying UDP traffic.
 // `tunWriter` is used to output packets back to the TUN device.  OutlineTunnel.Disconnect() will close `tunWriter`.
-func NewTunnel(streamDialer onet.StreamDialer, packetDialer onet.PacketDialer, isUDPEnabled bool, tunWriter io.WriteCloser) (Tunnel, error) {
+func NewTunnel(streamDialer onet.StreamDialer, packetDialer onet.PacketListener, isUDPEnabled bool, tunWriter io.WriteCloser) (Tunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("Must provide a TUN writer")
 	}

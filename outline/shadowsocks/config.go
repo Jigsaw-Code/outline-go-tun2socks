@@ -15,8 +15,12 @@
 package shadowsocks
 
 import (
-	"github.com/Jigsaw-Code/outline-ss-server/client"
+	"fmt"
+	"net"
+
 	onet "github.com/Jigsaw-Code/outline-ss-server/net"
+	ss "github.com/Jigsaw-Code/outline-ss-server/shadowsocks"
+	ss_client "github.com/Jigsaw-Code/outline-ss-server/shadowsocks/client"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
@@ -34,19 +38,31 @@ type Config struct {
 // is exportable (as an opaque object) via gobind.
 type Client struct {
 	onet.StreamDialer
-	onet.PacketDialer
+	onet.PacketListener
 }
 
 // NewClient provides a gobind-compatible wrapper for [client.NewClient].
 func NewClient(config *Config) (*Client, error) {
-	c, err := client.NewClient(config.Host, config.Port, config.Password, config.CipherName)
+	// TODO: consider using net.LookupIP to get a list of IPs, and add logic for optimal selection.
+	proxyIP, err := net.ResolveIPAddr("ip", config.Host)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Failed to resolve proxy address: %w", err)
+	}
+	cipher, err := ss.NewCipher(config.CipherName, config.Password)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create Shadowsocks cipher: %w", err)
+	}
+	streamDialer, err := ss_client.NewStreamDialer(proxyIP.String(), config.Port, cipher)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create StreamDialer: %w", err)
+	}
+	packetListener, err := ss_client.NewPacketListener(proxyIP.String(), config.Port, cipher)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to create PacketListener: %w", err)
 	}
 	if len(config.Prefix) > 0 {
 		log.Debugf("Using salt prefix: %s", string(config.Prefix))
-		c.SetTCPSaltGenerator(client.NewPrefixSaltGenerator(config.Prefix))
+		streamDialer.SetTCPSaltGenerator(ss_client.NewPrefixSaltGenerator(config.Prefix))
 	}
-
-	return &Client{c, c}, nil
+	return &Client{streamDialer, packetListener}, nil
 }

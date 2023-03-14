@@ -13,7 +13,7 @@ import (
 type udpHandler struct {
 	sync.Mutex
 
-	dialer  onet.PacketDialer
+	dialer  onet.PacketListener
 	timeout time.Duration
 	conns   map[core.UDPConn]net.PacketConn
 }
@@ -22,7 +22,7 @@ type udpHandler struct {
 //
 // `client` provides the Shadowsocks functionality.
 // `timeout` is the UDP read and write timeout.
-func NewUDPHandler(dialer onet.PacketDialer, timeout time.Duration) core.UDPConnHandler {
+func NewUDPHandler(dialer onet.PacketListener, timeout time.Duration) core.UDPConnHandler {
 	return &udpHandler{
 		dialer:  dialer,
 		timeout: timeout,
