@@ -45,7 +45,7 @@ type OutlineTunnel interface {
 //   - `client` is the Shadowsocks client (created by [shadowsocks.NewClient]).
 //   - `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
-// Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
+// Returns an error if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
 //
 // Deprecated: Use ConnectProxyTunnel
@@ -63,7 +63,7 @@ func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled b
 //   - `client` is the proxy client (created by [proxy.NewClient]).
 //   - `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
-// Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
+// Returns an error if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
 func ConnectProxyTunnel(fd int, client *proxy.Client, isUDPEnabled bool) (OutlineTunnel, error) {
 	tun, err := tunnel.MakeTunFile(fd)
