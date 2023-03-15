@@ -38,59 +38,61 @@ func NewUDPHandler(dialer onet.PacketListener, timeout time.Duration) core.UDPCo
 	}
 }
 
-func (h *udpHandler) Connect(conn core.UDPConn, target *net.UDPAddr) error {
+func (h *udpHandler) Connect(tunConn core.UDPConn, target *net.UDPAddr) error {
 	proxyConn, err := h.listener.ListenPacket(context.Background())
 	if err != nil {
 		return err
 	}
 	h.Lock()
-	h.conns[conn] = proxyConn
+	h.conns[tunConn] = proxyConn
 	h.Unlock()
-	go h.handleDownstreamUDP(conn, proxyConn)
+	go h.relayPacketsFromProxy(tunConn, proxyConn)
 	return nil
 }
 
-func (h *udpHandler) handleDownstreamUDP(conn core.UDPConn, proxyConn net.PacketConn) {
+// relayPacketsFromProxy relays packets from the proxy to the TUN device.
+func (h *udpHandler) relayPacketsFromProxy(tunConn core.UDPConn, proxyConn net.PacketConn) {
 	buf := core.NewBytes(core.BufSize)
 	defer func() {
-		h.Close(conn)
+		h.close(tunConn)
 		core.FreeBytes(buf)
 	}()
 	for {
 		proxyConn.SetDeadline(time.Now().Add(h.timeout))
-		n, addr, err := proxyConn.ReadFrom(buf)
+		n, sourceAddr, err := proxyConn.ReadFrom(buf)
 		if err != nil {
 			return
 		}
 		// No resolution will take place, the address sent by the proxy is a resolved IP.
-		udpAddr, err := net.ResolveUDPAddr("udp", addr.String())
+		sourceUDPAddr, err := net.ResolveUDPAddr("udp", sourceAddr.String())
 		if err != nil {
 			return
 		}
-		_, err = conn.WriteFrom(buf[:n], udpAddr)
+		_, err = tunConn.WriteFrom(buf[:n], sourceUDPAddr)
 		if err != nil {
 			return
 		}
 	}
 }
 
-func (h *udpHandler) ReceiveTo(conn core.UDPConn, data []byte, addr *net.UDPAddr) error {
+// ReceiveTo relays packets from the TUN device to the proxy. It's called by tun2socks.
+func (h *udpHandler) ReceiveTo(tunConn core.UDPConn, data []byte, destAddr *net.UDPAddr) error {
 	h.Lock()
-	proxyConn, ok := h.conns[conn]
+	proxyConn, ok := h.conns[tunConn]
 	h.Unlock()
 	if !ok {
-		return fmt.Errorf("connection %v->%v does not exist", conn.LocalAddr(), addr)
+		return fmt.Errorf("connection %v->%v does not exist", tunConn.LocalAddr(), destAddr)
 	}
 	proxyConn.SetDeadline(time.Now().Add(h.timeout))
-	_, err := proxyConn.WriteTo(data, addr)
+	_, err := proxyConn.WriteTo(data, destAddr)
 	return err
 }
 
-func (h *udpHandler) Close(conn core.UDPConn) {
-	conn.Close()
+func (h *udpHandler) close(tunConn core.UDPConn) {
+	tunConn.Close()
 	h.Lock()
 	defer h.Unlock()
-	if proxyConn, ok := h.conns[conn]; ok {
+	if proxyConn, ok := h.conns[tunConn]; ok {
 		proxyConn.Close()
 	}
 }
