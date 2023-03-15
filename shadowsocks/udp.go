@@ -1,6 +1,7 @@
 package shadowsocks
 
 import (
+	"context"
 	"fmt"
 	"net"
 	"sync"
@@ -31,7 +32,7 @@ func NewUDPHandler(dialer onet.PacketListener, timeout time.Duration) core.UDPCo
 }
 
 func (h *udpHandler) Connect(conn core.UDPConn, target *net.UDPAddr) error {
-	proxyConn, err := h.dialer.ListenPacket()
+	proxyConn, err := h.dialer.ListenPacket(context.Background())
 	if err != nil {
 		return err
 	}

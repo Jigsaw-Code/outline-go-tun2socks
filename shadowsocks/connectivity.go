@@ -1,6 +1,7 @@
 package shadowsocks
 
 import (
+	"context"
 	"errors"
 	"net"
 	"net/http"
@@ -31,7 +32,7 @@ type ReachabilityError struct {
 // the network support UDP traffic by issuing a DNS query though a resolver at `resolverAddr`.
 // Returns nil on success or an error on failure.
 func CheckUDPConnectivityWithDNS(client onet.PacketListener, resolverAddr net.Addr) error {
-	conn, err := client.ListenPacket()
+	conn, err := client.ListenPacket(context.Background())
 	if err != nil {
 		return err
 	}
@@ -60,6 +61,9 @@ func CheckUDPConnectivityWithDNS(client onet.PacketListener, resolverAddr net.Ad
 // be of the form: http://[host](:[port])(/[path]). Returns nil on success, error if `targetURL` is
 // invalid, AuthenticationError or ReachabilityError on connectivity failure.
 func CheckTCPConnectivityWithHTTP(dialer onet.StreamDialer, targetURL string) error {
+	deadline := time.Now().Add(tcpTimeout)
+	ctx, cancel := context.WithDeadline(context.Background(), deadline)
+	defer cancel()
 	req, err := http.NewRequest("HEAD", targetURL, nil)
 	if err != nil {
 		return err
@@ -68,12 +72,12 @@ func CheckTCPConnectivityWithHTTP(dialer onet.StreamDialer, targetURL string) er
 	if !hasPort(targetAddr) {
 		targetAddr = net.JoinHostPort(targetAddr, "80")
 	}
-	conn, err := dialer.Dial(targetAddr)
+	conn, err := dialer.Dial(ctx, targetAddr)
 	if err != nil {
 		return &ReachabilityError{err}
 	}
 	defer conn.Close()
-	conn.SetDeadline(time.Now().Add(tcpTimeout))
+	conn.SetDeadline(deadline)
 	err = req.Write(conn)
 	if err != nil {
 		return &AuthenticationError{err}

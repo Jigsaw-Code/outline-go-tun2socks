@@ -1,6 +1,7 @@
 package shadowsocks
 
 import (
+	"context"
 	"net"
 
 	onet "github.com/Jigsaw-Code/outline-ss-server/net"
@@ -17,7 +18,7 @@ func NewTCPHandler(client onet.StreamDialer) core.TCPConnHandler {
 }
 
 func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
-	proxyConn, err := h.dialer.Dial(target.String())
+	proxyConn, err := h.dialer.Dial(context.Background(), target.String())
 	if err != nil {
 		return err
 	}

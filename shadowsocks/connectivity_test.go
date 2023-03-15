@@ -1,6 +1,7 @@
 package shadowsocks
 
 import (
+	"context"
 	"errors"
 	"net"
 	"reflect"
@@ -64,13 +65,13 @@ type fakeSSClient struct {
 	failUDP            bool
 }
 
-func (c *fakeSSClient) Dial(raddr string) (onet.DuplexConn, error) {
+func (c *fakeSSClient) Dial(_ context.Context, raddr string) (onet.DuplexConn, error) {
 	if c.failReachability {
 		return nil, &net.OpError{}
 	}
 	return &fakeDuplexConn{failRead: c.failAuthentication}, nil
 }
-func (c *fakeSSClient) ListenPacket() (net.PacketConn, error) {
+func (c *fakeSSClient) ListenPacket(_ context.Context) (net.PacketConn, error) {
 	conn, err := net.ListenPacket("udp", "")
 	if err != nil {
 		return nil, err
