@@ -57,7 +57,7 @@ func NewClient(config *Config) (*Client, error) {
 		return nil, fmt.Errorf("Failed to create Shadowsocks cipher: %w", err)
 	}
 
-	streamDialer, err := client.NewStreamDialer(proxyTCPEndpoint, cipher)
+	streamDialer, err := client.NewShadowsocksStreamDialer(proxyTCPEndpoint, cipher)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create StreamDialer: %w", err)
 	}
@@ -66,7 +66,7 @@ func NewClient(config *Config) (*Client, error) {
 		streamDialer.SetTCPSaltGenerator(client.NewPrefixSaltGenerator(config.Prefix))
 	}
 
-	packetListener, err := client.NewPacketListener(proxyUDPEndpoint, cipher)
+	packetListener, err := client.NewShadowsocksPacketListener(proxyUDPEndpoint, cipher)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create PacketListener: %w", err)
 	}
