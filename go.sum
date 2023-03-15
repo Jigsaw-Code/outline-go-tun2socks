@@ -161,6 +161,8 @@ github.com/Jigsaw-Code/outline-ss-server v1.4.0 h1:TBmbPknt+6IIA1GfOky0i+JkZOsW4
 github.com/Jigsaw-Code/outline-ss-server v1.4.0/go.mod h1:ZpUdvhJPncn4RILa3YVM6hwSr1/5E52Vo0NRJ3KsfT4=
 github.com/Jigsaw-Code/outline-ss-server v1.4.1-0.20230314221127-6183eb8e5737 h1:/G/5WZuZOmP6dPmiKoU7Y3grrN71m5cflaqd9wR44vI=
 github.com/Jigsaw-Code/outline-ss-server v1.4.1-0.20230314221127-6183eb8e5737/go.mod h1:ZpUdvhJPncn4RILa3YVM6hwSr1/5E52Vo0NRJ3KsfT4=
+github.com/Jigsaw-Code/outline-ss-server v1.4.1-0.20230315172952-5a582f8d64b6 h1:3aO6kc79yyIB+nLOACI0BikbgkfeLN1b70dlj6kchPQ=
+github.com/Jigsaw-Code/outline-ss-server v1.4.1-0.20230315172952-5a582f8d64b6/go.mod h1:ZpUdvhJPncn4RILa3YVM6hwSr1/5E52Vo0NRJ3KsfT4=
 github.com/Knetic/govaluate v3.0.1-0.20171022003610-9aa49832a739+incompatible/go.mod h1:r7JcOSlj0wfOMncg0iLm8Leh48TZaKVeNIfJntJ2wa0=
 github.com/Masterminds/goutils v1.1.1 h1:5nUrii3FMTL5diU80unEVvNevw1nH4+ZV4DSLVJLSYI=
 github.com/Masterminds/goutils v1.1.1/go.mod h1:8cTjp+g8YejhMuvIA5y2vz3BpJxksy863GQaJW2MFNU=

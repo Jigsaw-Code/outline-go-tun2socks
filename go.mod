@@ -5,7 +5,7 @@ go 1.18
 require (
 	github.com/Jigsaw-Code/choir v1.0.1
 	github.com/Jigsaw-Code/getsni v0.0.0-20190807203514-efe2dbf35d1f
-	github.com/Jigsaw-Code/outline-ss-server v1.4.1-0.20230314221127-6183eb8e5737
+	github.com/Jigsaw-Code/outline-ss-server v1.4.1-0.20230315172952-5a582f8d64b6
 	github.com/crazy-max/xgo v0.14.0
 	github.com/eycorsican/go-tun2socks v1.16.11
 	golang.org/x/mobile v0.0.0-20221110043201-43a038452099
