@@ -36,6 +36,7 @@ type Config struct {
 
 // Client provides a transparent container for [client.Client] that
 // is exportable (as an opaque object) via gobind.
+// It's used by the connectivity test and the tun2socks handlers.
 type Client struct {
 	onet.StreamDialer
 	onet.PacketListener
@@ -49,6 +50,7 @@ func NewClient(config *Config) (*Client, error) {
 		return nil, fmt.Errorf("Failed to resolve proxy address: %w", err)
 	}
 	proxyTCPEndpoint := onet.TCPEndpoint{RemoteAddr: net.TCPAddr{IP: proxyIP.IP, Port: config.Port}}
+	proxyUDPEndpoint := onet.UDPEndpoint{RemoteAddr: net.UDPAddr{IP: proxyIP.IP, Port: config.Port}}
 
 	cipher, err := shadowsocks.NewCipher(config.CipherName, config.Password)
 	if err != nil {
@@ -64,7 +66,7 @@ func NewClient(config *Config) (*Client, error) {
 		streamDialer.SetTCPSaltGenerator(client.NewPrefixSaltGenerator(config.Prefix))
 	}
 
-	packetListener, err := client.NewPacketListener(proxyIP.String(), config.Port, cipher)
+	packetListener, err := client.NewPacketListener(proxyUDPEndpoint, cipher)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create PacketListener: %w", err)
 	}
