@@ -12,11 +12,18 @@ import (
 )
 
 type udpHandler struct {
+	// Protects the connections map
 	sync.Mutex
 
-	dialer  onet.PacketListener
+	// Used to establish connections to the proxy
+	listener onet.PacketListener
+
+	// How long to wait for a packet from the proxy. Longer than this and the connection
+	// is closed.
 	timeout time.Duration
-	conns   map[core.UDPConn]net.PacketConn
+
+	// Maps connections from TUN to connections to the proxy.
+	conns map[core.UDPConn]net.PacketConn
 }
 
 // NewUDPHandler returns a Shadowsocks UDP connection handler.
@@ -25,14 +32,14 @@ type udpHandler struct {
 // `timeout` is the UDP read and write timeout.
 func NewUDPHandler(dialer onet.PacketListener, timeout time.Duration) core.UDPConnHandler {
 	return &udpHandler{
-		dialer:  dialer,
-		timeout: timeout,
-		conns:   make(map[core.UDPConn]net.PacketConn, 8),
+		listener: dialer,
+		timeout:  timeout,
+		conns:    make(map[core.UDPConn]net.PacketConn, 8),
 	}
 }
 
 func (h *udpHandler) Connect(conn core.UDPConn, target *net.UDPAddr) error {
-	proxyConn, err := h.dialer.ListenPacket(context.Background())
+	proxyConn, err := h.listener.ListenPacket(context.Background())
 	if err != nil {
 		return err
 	}
