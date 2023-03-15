@@ -81,7 +81,10 @@ func (t *outlinetunnel) UpdateUDPSupport() bool {
 func (t *outlinetunnel) registerConnectionHandlers() {
 	var udpHandler core.UDPConnHandler
 	if t.isUDPEnabled {
-		udpHandler = oss.NewUDPHandler(t.client, 30*time.Second)
+		// Tun2socks will supposedly call udpHandler.Close() when the app socket is no longer needed.
+		// However, we set a timeout to be safe. A UDP NAT timeout of at least 5 minutes is recommended
+		// in RFC 4787 Section 4.3.
+		udpHandler = oss.NewUDPHandler(t.client, 5*time.Minute)
 	} else {
 		udpHandler = dnsfallback.NewUDPHandler()
 	}
