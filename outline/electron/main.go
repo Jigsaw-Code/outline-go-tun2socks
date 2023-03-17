@@ -25,7 +25,7 @@ import (
 	"syscall"
 	"time"
 
-	oss "github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/proxy"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/shadowsocks"
 	"github.com/eycorsican/go-tun2socks/common/log"
 	_ "github.com/eycorsican/go-tun2socks/common/log/simple" // Register a simple logger.
@@ -103,19 +103,19 @@ func main() {
 		configBytes, err := json.Marshal(configMap)
 		if err != nil {
 			log.Errorf("Invalid proxy configuration flags: %v", err)
-			os.Exit(oss.IllegalConfiguration)
+			os.Exit(proxy.IllegalConfiguration)
 		}
 		config = string(configBytes)
 	}
 
-	client, err := oss.MakeClient(config)
+	c, err := proxy.NewClient(config)
 	if err != nil {
 		log.Errorf("Failed to construct Shadowsocks client: %v", err)
-		os.Exit(oss.IllegalConfiguration)
+		os.Exit(proxy.IllegalConfiguration)
 	}
 
 	if *args.checkConnectivity {
-		connErrCode, err := oss.CheckConnectivity(client)
+		connErrCode, err := proxy.CheckConnectivity(c)
 		log.Debugf("Connectivity checks error code: %v", connErrCode)
 		if err != nil {
 			log.Errorf("Failed to perform connectivity checks: %v", err)
@@ -128,19 +128,19 @@ func main() {
 	tunDevice, err := tun.OpenTunDevice(*args.tunName, *args.tunAddr, *args.tunGw, *args.tunMask, dnsResolvers, persistTun)
 	if err != nil {
 		log.Errorf("Failed to open TUN device: %v", err)
-		os.Exit(oss.SystemMisconfigured)
+		os.Exit(proxy.SystemMisconfigured)
 	}
 	// Output packets to TUN device
 	core.RegisterOutputFn(tunDevice.Write)
 
 	// Register TCP and UDP connection handlers
-	core.RegisterTCPConnHandler(shadowsocks.NewTCPHandler(client))
+	core.RegisterTCPConnHandler(shadowsocks.NewTCPHandler(c))
 	if *args.dnsFallback {
 		// UDP connectivity not supported, fall back to DNS over TCP.
 		log.Debugf("Registering DNS fallback UDP handler")
 		core.RegisterUDPConnHandler(dnsfallback.NewUDPHandler())
 	} else {
-		core.RegisterUDPConnHandler(shadowsocks.NewUDPHandler(client, udpTimeout))
+		core.RegisterUDPConnHandler(shadowsocks.NewUDPHandler(c, udpTimeout))
 	}
 
 	// Configure LWIP stack to receive input data from the TUN device
@@ -149,7 +149,7 @@ func main() {
 		_, err := io.CopyBuffer(lwipWriter, tunDevice, make([]byte, mtu))
 		if err != nil {
 			log.Errorf("Failed to write data to network stack: %v", err)
-			os.Exit(oss.Unexpected)
+			os.Exit(proxy.Unexpected)
 		}
 	}()
 

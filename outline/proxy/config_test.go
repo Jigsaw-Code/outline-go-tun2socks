@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package shadowsocks
+package proxy
 
 import (
 	"bytes"
@@ -35,7 +35,11 @@ func Test_extractPrefixBytes(t *testing.T) {
 			input: "",
 			want:  []byte{},
 		}, {
-			name:  "extended",
+			name:  "edge cases (explicit)",
+			input: "\x00\x01\x02 \x7e\x7f \xc2\x80\xc2\x81 \xc3\xbd\xc3\xbf",
+			want:  []byte("\x00\x01\x02 \x7e\x7f \x80\x81 \xfd\xff"),
+		}, {
+			name:  "edge cases (roundtrip)",
 			input: string([]rune{0, 1, 2, 126, 127, 128, 129, 254, 255}),
 			want:  []byte{0, 1, 2, 126, 127, 128, 129, 254, 255},
 		}, {
@@ -78,38 +82,38 @@ func Test_newConfig(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
-		want    *Config
+		want    *configJSON
 		wantErr bool
 	}{
 		{
 			name:  "normal config",
 			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234"}`,
-			want: &Config{
-				Host:       "192.0.2.1",
-				Port:       12345,
-				CipherName: "some-cipher",
-				Password:   "abcd1234",
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     12345,
+				Method:   "some-cipher",
+				Password: "abcd1234",
 			},
 		},
 		{
 			name:  "normal config with prefix",
 			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234","prefix":"abc 123"}`,
-			want: &Config{
-				Host:       "192.0.2.1",
-				Port:       12345,
-				CipherName: "some-cipher",
-				Password:   "abcd1234",
-				Prefix:     []byte("abc 123"),
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     12345,
+				Method:   "some-cipher",
+				Password: "abcd1234",
+				Prefix:   "abc 123",
 			},
 		},
 		{
 			name:  "normal config with extra fields",
 			input: `{"extra_field":"ignored","host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234"}`,
-			want: &Config{
-				Host:       "192.0.2.1",
-				Port:       12345,
-				CipherName: "some-cipher",
-				Password:   "abcd1234",
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     12345,
+				Method:   "some-cipher",
+				Password: "abcd1234",
 			},
 		},
 		{
@@ -175,8 +179,8 @@ func Test_newConfig(t *testing.T) {
 			}
 			if got.Host != tt.want.Host ||
 				got.Port != tt.want.Port ||
-				got.CipherName != tt.want.CipherName ||
-				!bytes.Equal(got.Prefix, tt.want.Prefix) {
+				got.Method != tt.want.Method ||
+				got.Prefix != tt.want.Prefix {
 				t.Errorf("newConfig() = %v, want %v", got, tt.want)
 			}
 		})
