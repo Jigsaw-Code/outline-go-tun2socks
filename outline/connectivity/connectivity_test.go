@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package outline
+package connectivity
 
 import (
 	"context"
@@ -28,7 +28,7 @@ import (
 
 func TestCheckUDPConnectivityWithDNS_Success(t *testing.T) {
 	client := &fakeSSClient{}
-	err := checkUDPConnectivityWithDNS(client, &net.UDPAddr{})
+	err := CheckUDPConnectivityWithDNS(client, &net.UDPAddr{})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestCheckUDPConnectivityWithDNS_Success(t *testing.T) {
 
 func TestCheckUDPConnectivityWithDNS_Fail(t *testing.T) {
 	client := &fakeSSClient{failUDP: true}
-	err := checkUDPConnectivityWithDNS(client, &net.UDPAddr{})
+	err := CheckUDPConnectivityWithDNS(client, &net.UDPAddr{})
 	if err == nil {
 		t.Fail()
 	}
@@ -44,7 +44,7 @@ func TestCheckUDPConnectivityWithDNS_Fail(t *testing.T) {
 
 func TestCheckTCPConnectivityWithHTTP_Success(t *testing.T) {
 	client := &fakeSSClient{}
-	err := checkTCPConnectivityWithHTTP(client, "")
+	err := CheckTCPConnectivityWithHTTP(client, "")
 	if err != nil {
 		t.Fail()
 	}
@@ -52,7 +52,7 @@ func TestCheckTCPConnectivityWithHTTP_Success(t *testing.T) {
 
 func TestCheckTCPConnectivityWithHTTP_FailReachability(t *testing.T) {
 	client := &fakeSSClient{failReachability: true}
-	err := checkTCPConnectivityWithHTTP(client, "")
+	err := CheckTCPConnectivityWithHTTP(client, "")
 	if err == nil {
 		t.Fail()
 	}
@@ -63,7 +63,7 @@ func TestCheckTCPConnectivityWithHTTP_FailReachability(t *testing.T) {
 
 func TestCheckTCPConnectivityWithHTTP_FailAuthentication(t *testing.T) {
 	client := &fakeSSClient{failAuthentication: true}
-	err := checkTCPConnectivityWithHTTP(client, "")
+	err := CheckTCPConnectivityWithHTTP(client, "")
 	if err == nil {
 		t.Fail()
 	}

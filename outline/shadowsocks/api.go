@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport/shadowsocks"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport/shadowsocks/client"
@@ -78,7 +79,7 @@ const reachabilityTimeout = 10 * time.Second
 // error code to return accounting for transient network failures.
 // Returns an error if an unexpected error ocurrs.
 func CheckConnectivity(client *Client) (int, error) {
-	return outline.CheckConnectivity(client)
+	return connectivity.CheckConnectivity(client)
 }
 
 // CheckServerReachable determines whether the server at `host:port` is reachable over TCP.

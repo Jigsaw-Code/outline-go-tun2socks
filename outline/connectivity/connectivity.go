@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package outline
+package connectivity
 
 import (
 	"context"
@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
 )
 
@@ -63,15 +64,15 @@ type reachabilityError struct {
 // the current network. Parallelizes the execution of TCP and UDP checks, selects the appropriate
 // error code to return accounting for transient network failures.
 // Returns an error if an unexpected error ocurrs.
-func CheckConnectivity(client *Client) (int, error) {
+func CheckConnectivity(client *outline.Client) (int, error) {
 	// Start asynchronous UDP support check.
 	udpChan := make(chan error)
 	go func() {
 		resolverAddr := &net.UDPAddr{IP: net.ParseIP("1.1.1.1"), Port: 53}
-		udpChan <- checkUDPConnectivityWithDNS(client, resolverAddr)
+		udpChan <- CheckUDPConnectivityWithDNS(client, resolverAddr)
 	}()
 	// Check whether the proxy is reachable and that the client is able to authenticate to the proxy
-	tcpErr := checkTCPConnectivityWithHTTP(client, "http://example.com")
+	tcpErr := CheckTCPConnectivityWithHTTP(client, "http://example.com")
 	if tcpErr == nil {
 		udpErr := <-udpChan
 		if udpErr == nil {
@@ -90,10 +91,10 @@ func CheckConnectivity(client *Client) (int, error) {
 	return Unexpected, tcpErr
 }
 
-// checkUDPConnectivityWithDNS determines whether the Shadowsocks proxy represented by `client` and
+// CheckUDPConnectivityWithDNS determines whether the Shadowsocks proxy represented by `client` and
 // the network support UDP traffic by issuing a DNS query though a resolver at `resolverAddr`.
 // Returns nil on success or an error on failure.
-func checkUDPConnectivityWithDNS(client transport.PacketListener, resolverAddr net.Addr) error {
+func CheckUDPConnectivityWithDNS(client transport.PacketListener, resolverAddr net.Addr) error {
 	conn, err := client.ListenPacket(context.Background())
 	if err != nil {
 		return err
@@ -118,11 +119,11 @@ func checkUDPConnectivityWithDNS(client transport.PacketListener, resolverAddr n
 	return errors.New("UDP connectivity check timed out")
 }
 
-// checkTCPConnectivityWithHTTP determines whether the proxy is reachable over TCP and validates the
+// CheckTCPConnectivityWithHTTP determines whether the proxy is reachable over TCP and validates the
 // client's authentication credentials by performing an HTTP HEAD request to `targetURL`, which must
 // be of the form: http://[host](:[port])(/[path]). Returns nil on success, error if `targetURL` is
 // invalid, AuthenticationError or ReachabilityError on connectivity failure.
-func checkTCPConnectivityWithHTTP(dialer transport.StreamDialer, targetURL string) error {
+func CheckTCPConnectivityWithHTTP(dialer transport.StreamDialer, targetURL string) error {
 	deadline := time.Now().Add(tcpTimeout)
 	ctx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()

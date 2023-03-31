@@ -25,7 +25,7 @@ import (
 
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
 
-	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 )
 
@@ -74,7 +74,7 @@ func newTunnel(streamDialer transport.StreamDialer, packetDialer transport.Packe
 
 func (t *outlinetunnel) UpdateUDPSupport() bool {
 	resolverAddr := &net.UDPAddr{IP: net.ParseIP("1.1.1.1"), Port: 53}
-	isUDPEnabled := outline.CheckUDPConnectivityWithDNS(t.packetDialer, resolverAddr) == nil
+	isUDPEnabled := connectivity.CheckUDPConnectivityWithDNS(t.packetDialer, resolverAddr) == nil
 	if t.isUDPEnabled != isUDPEnabled {
 		t.isUDPEnabled = isUDPEnabled
 		t.lwipStack.Close() // Close existing connections to avoid using the previous handlers.
@@ -88,10 +88,10 @@ func (t *outlinetunnel) UpdateUDPSupport() bool {
 func (t *outlinetunnel) registerConnectionHandlers() {
 	var udpHandler core.UDPConnHandler
 	if t.isUDPEnabled {
-		udpHandler = outline.NewUDPHandler(t.packetDialer, 30*time.Second)
+		udpHandler = NewUDPHandler(t.packetDialer, 30*time.Second)
 	} else {
 		udpHandler = dnsfallback.NewUDPHandler()
 	}
-	core.RegisterTCPConnHandler(outline.NewTCPHandler(t.streamDialer))
+	core.RegisterTCPConnHandler(NewTCPHandler(t.streamDialer))
 	core.RegisterUDPConnHandler(udpHandler)
 }
