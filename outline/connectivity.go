@@ -32,20 +32,68 @@ const (
 	bufferLength        = 512
 )
 
-// AuthenticationError is used to signal failed authentication to the Shadowsocks proxy.
-type AuthenticationError struct {
+// Outline error codes. Must be kept in sync with definitions in outline-client/cordova-plugin-outline/outlinePlugin.js
+const (
+	NoError                     = 0
+	Unexpected                  = 1
+	NoVPNPermissions            = 2
+	AuthenticationFailure       = 3
+	UDPConnectivity             = 4
+	Unreachable                 = 5
+	VpnStartFailure             = 6
+	IllegalConfiguration        = 7
+	ShadowsocksStartFailure     = 8
+	ConfigureSystemProxyFailure = 9
+	NoAdminPermissions          = 10
+	UnsupportedRoutingTable     = 11
+	SystemMisconfigured         = 12
+)
+
+// authenticationError is used to signal failed authentication to the Shadowsocks proxy.
+type authenticationError struct {
 	error
 }
 
-// ReachabilityError is used to signal an unreachable proxy.
-type ReachabilityError struct {
+// reachabilityError is used to signal an unreachable proxy.
+type reachabilityError struct {
 	error
 }
 
-// CheckUDPConnectivityWithDNS determines whether the Shadowsocks proxy represented by `client` and
+// CheckConnectivity determines whether the Shadowsocks proxy can relay TCP and UDP traffic under
+// the current network. Parallelizes the execution of TCP and UDP checks, selects the appropriate
+// error code to return accounting for transient network failures.
+// Returns an error if an unexpected error ocurrs.
+func CheckConnectivity(client *Client) (int, error) {
+	// Start asynchronous UDP support check.
+	udpChan := make(chan error)
+	go func() {
+		resolverAddr := &net.UDPAddr{IP: net.ParseIP("1.1.1.1"), Port: 53}
+		udpChan <- checkUDPConnectivityWithDNS(client, resolverAddr)
+	}()
+	// Check whether the proxy is reachable and that the client is able to authenticate to the proxy
+	tcpErr := checkTCPConnectivityWithHTTP(client, "http://example.com")
+	if tcpErr == nil {
+		udpErr := <-udpChan
+		if udpErr == nil {
+			return NoError, nil
+		}
+		return UDPConnectivity, nil
+	}
+	var authErr *authenticationError
+	var reachabilityErr *reachabilityError
+	if errors.As(tcpErr, &authErr) {
+		return AuthenticationFailure, nil
+	} else if errors.As(tcpErr, &reachabilityErr) {
+		return Unreachable, nil
+	}
+	// The error is not related to the connectivity checks.
+	return Unexpected, tcpErr
+}
+
+// checkUDPConnectivityWithDNS determines whether the Shadowsocks proxy represented by `client` and
 // the network support UDP traffic by issuing a DNS query though a resolver at `resolverAddr`.
 // Returns nil on success or an error on failure.
-func CheckUDPConnectivityWithDNS(client transport.PacketListener, resolverAddr net.Addr) error {
+func checkUDPConnectivityWithDNS(client transport.PacketListener, resolverAddr net.Addr) error {
 	conn, err := client.ListenPacket(context.Background())
 	if err != nil {
 		return err
@@ -70,11 +118,11 @@ func CheckUDPConnectivityWithDNS(client transport.PacketListener, resolverAddr n
 	return errors.New("UDP connectivity check timed out")
 }
 
-// CheckTCPConnectivityWithHTTP determines whether the proxy is reachable over TCP and validates the
+// checkTCPConnectivityWithHTTP determines whether the proxy is reachable over TCP and validates the
 // client's authentication credentials by performing an HTTP HEAD request to `targetURL`, which must
 // be of the form: http://[host](:[port])(/[path]). Returns nil on success, error if `targetURL` is
 // invalid, AuthenticationError or ReachabilityError on connectivity failure.
-func CheckTCPConnectivityWithHTTP(dialer transport.StreamDialer, targetURL string) error {
+func checkTCPConnectivityWithHTTP(dialer transport.StreamDialer, targetURL string) error {
 	deadline := time.Now().Add(tcpTimeout)
 	ctx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
@@ -88,17 +136,17 @@ func CheckTCPConnectivityWithHTTP(dialer transport.StreamDialer, targetURL strin
 	}
 	conn, err := dialer.Dial(ctx, targetAddr)
 	if err != nil {
-		return &ReachabilityError{err}
+		return &reachabilityError{err}
 	}
 	defer conn.Close()
 	conn.SetDeadline(deadline)
 	err = req.Write(conn)
 	if err != nil {
-		return &AuthenticationError{err}
+		return &authenticationError{err}
 	}
 	n, err := conn.Read(make([]byte, bufferLength))
 	if n == 0 && err != nil {
-		return &AuthenticationError{err}
+		return &authenticationError{err}
 	}
 	return nil
 }

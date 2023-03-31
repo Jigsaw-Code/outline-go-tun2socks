@@ -28,7 +28,7 @@ import (
 
 func TestCheckUDPConnectivityWithDNS_Success(t *testing.T) {
 	client := &fakeSSClient{}
-	err := CheckUDPConnectivityWithDNS(client, &net.UDPAddr{})
+	err := checkUDPConnectivityWithDNS(client, &net.UDPAddr{})
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
@@ -36,7 +36,7 @@ func TestCheckUDPConnectivityWithDNS_Success(t *testing.T) {
 
 func TestCheckUDPConnectivityWithDNS_Fail(t *testing.T) {
 	client := &fakeSSClient{failUDP: true}
-	err := CheckUDPConnectivityWithDNS(client, &net.UDPAddr{})
+	err := checkUDPConnectivityWithDNS(client, &net.UDPAddr{})
 	if err == nil {
 		t.Fail()
 	}
@@ -44,7 +44,7 @@ func TestCheckUDPConnectivityWithDNS_Fail(t *testing.T) {
 
 func TestCheckTCPConnectivityWithHTTP_Success(t *testing.T) {
 	client := &fakeSSClient{}
-	err := CheckTCPConnectivityWithHTTP(client, "")
+	err := checkTCPConnectivityWithHTTP(client, "")
 	if err != nil {
 		t.Fail()
 	}
@@ -52,22 +52,22 @@ func TestCheckTCPConnectivityWithHTTP_Success(t *testing.T) {
 
 func TestCheckTCPConnectivityWithHTTP_FailReachability(t *testing.T) {
 	client := &fakeSSClient{failReachability: true}
-	err := CheckTCPConnectivityWithHTTP(client, "")
+	err := checkTCPConnectivityWithHTTP(client, "")
 	if err == nil {
 		t.Fail()
 	}
-	if _, ok := err.(*ReachabilityError); !ok {
+	if _, ok := err.(*reachabilityError); !ok {
 		t.Fatalf("Expected reachability error, got: %v", reflect.TypeOf(err))
 	}
 }
 
 func TestCheckTCPConnectivityWithHTTP_FailAuthentication(t *testing.T) {
 	client := &fakeSSClient{failAuthentication: true}
-	err := CheckTCPConnectivityWithHTTP(client, "")
+	err := checkTCPConnectivityWithHTTP(client, "")
 	if err == nil {
 		t.Fail()
 	}
-	if _, ok := err.(*AuthenticationError); !ok {
+	if _, ok := err.(*authenticationError); !ok {
 		t.Fatalf("Expected authentication error, got: %v", reflect.TypeOf(err))
 	}
 }
