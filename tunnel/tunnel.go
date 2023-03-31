@@ -23,9 +23,9 @@ import (
 
 // Tunnel represents a session on a TUN device.
 type Tunnel interface {
-	// IsConnected indicates whether the tunnel is in a connected state.
+	// IsConnected is true if Disconnect has not been called.
 	IsConnected() bool
-	// Disconnect disconnects the tunnel.
+	// Disconnect closes the underlying resources. Subsequent Write calls will fail.
 	Disconnect()
 	// Write writes input data to the TUN interface.
 	Write(data []byte) (int, error)
