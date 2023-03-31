@@ -42,7 +42,7 @@ type ReachabilityError struct {
 	error
 }
 
-// checkUDPConnectivityWithDNS determines whether the Shadowsocks proxy represented by `client` and
+// CheckUDPConnectivityWithDNS determines whether the Shadowsocks proxy represented by `client` and
 // the network support UDP traffic by issuing a DNS query though a resolver at `resolverAddr`.
 // Returns nil on success or an error on failure.
 func CheckUDPConnectivityWithDNS(client transport.PacketListener, resolverAddr net.Addr) error {
@@ -70,7 +70,7 @@ func CheckUDPConnectivityWithDNS(client transport.PacketListener, resolverAddr n
 	return errors.New("UDP connectivity check timed out")
 }
 
-// checkTCPConnectivityWithHTTP determines whether the proxy is reachable over TCP and validates the
+// CheckTCPConnectivityWithHTTP determines whether the proxy is reachable over TCP and validates the
 // client's authentication credentials by performing an HTTP HEAD request to `targetURL`, which must
 // be of the form: http://[host](:[port])(/[path]). Returns nil on success, error if `targetURL` is
 // invalid, AuthenticationError or ReachabilityError on connectivity failure.

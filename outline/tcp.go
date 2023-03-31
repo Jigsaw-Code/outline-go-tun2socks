@@ -51,7 +51,7 @@ func copyOneWay(leftConn, rightConn transport.StreamConn) (int64, error) {
 	return n, err
 }
 
-// Relay copies between left and right bidirectionally. Returns number of
+// relay copies between left and right bidirectionally. Returns number of
 // bytes copied from right to left, from left to right, and any error occurred.
 // Relay allows for half-closed connections: if one side is done writing, it can
 // still read all remaining data from its peer.
