@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/neterrors"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
 )
 
@@ -31,23 +32,6 @@ const (
 	udpTimeout          = 1 * time.Second
 	udpMaxRetryAttempts = 5
 	bufferLength        = 512
-)
-
-// Outline error codes. Must be kept in sync with definitions in outline-client/cordova-plugin-outline/outlinePlugin.js
-const (
-	NoError                     = 0
-	Unexpected                  = 1
-	NoVPNPermissions            = 2
-	AuthenticationFailure       = 3
-	UDPConnectivity             = 4
-	Unreachable                 = 5
-	VpnStartFailure             = 6
-	IllegalConfiguration        = 7
-	ShadowsocksStartFailure     = 8
-	ConfigureSystemProxyFailure = 9
-	NoAdminPermissions          = 10
-	UnsupportedRoutingTable     = 11
-	SystemMisconfigured         = 12
 )
 
 // authenticationError is used to signal failed authentication to the Shadowsocks proxy.
@@ -76,19 +60,19 @@ func CheckConnectivity(client *outline.Client) (int, error) {
 	if tcpErr == nil {
 		udpErr := <-udpChan
 		if udpErr == nil {
-			return NoError, nil
+			return neterrors.NoError, nil
 		}
-		return UDPConnectivity, nil
+		return neterrors.UDPConnectivity, nil
 	}
 	var authErr *authenticationError
 	var reachabilityErr *reachabilityError
 	if errors.As(tcpErr, &authErr) {
-		return AuthenticationFailure, nil
+		return neterrors.AuthenticationFailure, nil
 	} else if errors.As(tcpErr, &reachabilityErr) {
-		return Unreachable, nil
+		return neterrors.Unreachable, nil
 	}
 	// The error is not related to the connectivity checks.
-	return Unexpected, tcpErr
+	return neterrors.Unexpected, tcpErr
 }
 
 // CheckUDPConnectivityWithDNS determines whether the Shadowsocks proxy represented by `client` and
