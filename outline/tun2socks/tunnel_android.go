@@ -30,11 +30,6 @@ func init() {
 	log.SetLevel(log.WARN)
 }
 
-// OutlineTunnel embeds the tun2socks.OutlineTunnel interface so it gets exported by gobind.
-type OutlineTunnel interface {
-	outline.Tunnel
-}
-
 // ConnectShadowsocksTunnel reads packets from a TUN device and routes it to a Shadowsocks proxy server.
 // Returns an OutlineTunnel instance and does *not* take ownership of the TUN file descriptor; the
 // caller is responsible for closing after OutlineTunnel disconnects.
@@ -49,7 +44,7 @@ type OutlineTunnel interface {
 // connect.
 //
 // Deprecated: Use ConnectProxyTunnel
-func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled bool) (OutlineTunnel, error) {
+func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled bool) (Tunnel, error) {
 	return ConnectProxyTunnel(fd, &proxy.Client{Client: client}, isUDPEnabled)
 }
 
@@ -65,12 +60,12 @@ func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled b
 //
 // Returns an error if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectProxyTunnel(fd int, client *proxy.Client, isUDPEnabled bool) (OutlineTunnel, error) {
+func ConnectProxyTunnel(fd int, client *proxy.Client, isUDPEnabled bool) (Tunnel, error) {
 	tun, err := tunnel.MakeTunFile(fd)
 	if err != nil {
 		return nil, err
 	}
-	t, err := outline.NewTunnel(client, isUDPEnabled, tun)
+	t, err := newTunnel(client, client, isUDPEnabled, tun)
 	if err != nil {
 		return nil, err
 	}

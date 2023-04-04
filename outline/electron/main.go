@@ -25,7 +25,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/neterrors"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/proxy"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/tun2socks"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/shadowsocks"
 	"github.com/eycorsican/go-tun2socks/common/log"
 	_ "github.com/eycorsican/go-tun2socks/common/log/simple" // Register a simple logger.
@@ -92,6 +95,21 @@ func main() {
 
 	config := *args.proxyConfig
 	if len(config) == 0 {
+		// Validate legacy proxy flags
+		if *args.proxyHost == "" {
+			log.Errorf("Must provide a Shadowsocks proxy host name or IP address")
+			os.Exit(neterrors.IllegalConfiguration.Number())
+		} else if *args.proxyPort <= 0 || *args.proxyPort > 65535 {
+			log.Errorf("Must provide a valid Shadowsocks proxy port [1:65535]")
+			os.Exit(neterrors.IllegalConfiguration.Number())
+		} else if *args.proxyPassword == "" {
+			log.Errorf("Must provide a Shadowsocks proxy password")
+			os.Exit(neterrors.IllegalConfiguration.Number())
+		} else if *args.proxyCipher == "" {
+			log.Errorf("Must provide a Shadowsocks proxy encryption cipher")
+			os.Exit(neterrors.IllegalConfiguration.Number())
+		}
+
 		// Construct a JSON object from the deprecated flags.
 		configMap := make(map[string]interface{})
 		configMap["host"] = args.proxyHost
@@ -103,24 +121,24 @@ func main() {
 		configBytes, err := json.Marshal(configMap)
 		if err != nil {
 			log.Errorf("Invalid proxy configuration flags: %v", err)
-			os.Exit(proxy.IllegalConfiguration)
+			os.Exit(neterrors.IllegalConfiguration.Number())
 		}
 		config = string(configBytes)
 	}
 
-	c, err := proxy.NewClient(config)
+	client, err := proxy.NewClient(config)
 	if err != nil {
 		log.Errorf("Failed to construct Shadowsocks client: %v", err)
-		os.Exit(proxy.IllegalConfiguration)
+		os.Exit(neterrors.IllegalConfiguration.Number())
 	}
 
 	if *args.checkConnectivity {
-		connErrCode, err := proxy.CheckConnectivity(c)
+		connErrCode, err := connectivity.CheckConnectivity(client)
 		log.Debugf("Connectivity checks error code: %v", connErrCode)
 		if err != nil {
 			log.Errorf("Failed to perform connectivity checks: %v", err)
 		}
-		os.Exit(connErrCode)
+		os.Exit(connErrCode.Number())
 	}
 
 	// Open TUN device
@@ -128,19 +146,19 @@ func main() {
 	tunDevice, err := tun.OpenTunDevice(*args.tunName, *args.tunAddr, *args.tunGw, *args.tunMask, dnsResolvers, persistTun)
 	if err != nil {
 		log.Errorf("Failed to open TUN device: %v", err)
-		os.Exit(proxy.SystemMisconfigured)
+		os.Exit(neterrors.SystemMisconfigured.Number())
 	}
 	// Output packets to TUN device
 	core.RegisterOutputFn(tunDevice.Write)
 
 	// Register TCP and UDP connection handlers
-	core.RegisterTCPConnHandler(shadowsocks.NewTCPHandler(c))
+	core.RegisterTCPConnHandler(tun2socks.NewTCPHandler(client))
 	if *args.dnsFallback {
 		// UDP connectivity not supported, fall back to DNS over TCP.
 		log.Debugf("Registering DNS fallback UDP handler")
 		core.RegisterUDPConnHandler(dnsfallback.NewUDPHandler())
 	} else {
-		core.RegisterUDPConnHandler(shadowsocks.NewUDPHandler(c, udpTimeout))
+		core.RegisterUDPConnHandler(tun2socks.NewUDPHandler(client, udpTimeout))
 	}
 
 	// Configure LWIP stack to receive input data from the TUN device
@@ -149,7 +167,7 @@ func main() {
 		_, err := io.CopyBuffer(lwipWriter, tunDevice, make([]byte, mtu))
 		if err != nil {
 			log.Errorf("Failed to write data to network stack: %v", err)
-			os.Exit(proxy.Unexpected)
+			os.Exit(neterrors.Unexpected.Number())
 		}
 	}()
 
