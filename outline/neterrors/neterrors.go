@@ -18,19 +18,25 @@
 // provide its own standalone API, leaving translations to the consumer.
 package neterrors
 
+type Error int
+
+func (e Error) Number() int {
+	return int(e)
+}
+
 // Outline error codes. Must be kept in sync with definitions in https://github.com/Jigsaw-Code/outline-client/blob/master/src/www/model/errors.ts
 const (
-	NoError                     = 0
-	Unexpected                  = 1
-	NoVPNPermissions            = 2 // Unused
-	AuthenticationFailure       = 3
-	UDPConnectivity             = 4
-	Unreachable                 = 5
-	VpnStartFailure             = 6  // Unused
-	IllegalConfiguration        = 7  // Electron only
-	ShadowsocksStartFailure     = 8  // Unused
-	ConfigureSystemProxyFailure = 9  // Unused
-	NoAdminPermissions          = 10 // Unused
-	UnsupportedRoutingTable     = 11 // Unused
-	SystemMisconfigured         = 12 // Electron only
+	NoError                     Error = 0
+	Unexpected                  Error = 1
+	NoVPNPermissions            Error = 2 // Unused
+	AuthenticationFailure       Error = 3
+	UDPConnectivity             Error = 4
+	Unreachable                 Error = 5
+	VpnStartFailure             Error = 6  // Unused
+	IllegalConfiguration        Error = 7  // Electron only
+	ShadowsocksStartFailure     Error = 8  // Unused
+	ConfigureSystemProxyFailure Error = 9  // Unused
+	NoAdminPermissions          Error = 10 // Unused
+	UnsupportedRoutingTable     Error = 11 // Unused
+	SystemMisconfigured         Error = 12 // Electron only
 )

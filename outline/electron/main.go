@@ -88,16 +88,16 @@ func main() {
 	// Validate proxy flags
 	if *args.proxyHost == "" {
 		log.Errorf("Must provide a Shadowsocks proxy host name or IP address")
-		os.Exit(neterrors.IllegalConfiguration)
+		os.Exit(neterrors.IllegalConfiguration.Number())
 	} else if *args.proxyPort <= 0 || *args.proxyPort > 65535 {
 		log.Errorf("Must provide a valid Shadowsocks proxy port [1:65535]")
-		os.Exit(neterrors.IllegalConfiguration)
+		os.Exit(neterrors.IllegalConfiguration.Number())
 	} else if *args.proxyPassword == "" {
 		log.Errorf("Must provide a Shadowsocks proxy password")
-		os.Exit(neterrors.IllegalConfiguration)
+		os.Exit(neterrors.IllegalConfiguration.Number())
 	} else if *args.proxyCipher == "" {
 		log.Errorf("Must provide a Shadowsocks proxy encryption cipher")
-		os.Exit(neterrors.IllegalConfiguration)
+		os.Exit(neterrors.IllegalConfiguration.Number())
 	}
 
 	config := shadowsocks.Config{
@@ -114,7 +114,7 @@ func main() {
 	for i, r := range prefixRunes {
 		if (r & 0xFF) != r {
 			log.Errorf("Character out of range: %r", r)
-			os.Exit(neterrors.IllegalConfiguration)
+			os.Exit(neterrors.IllegalConfiguration.Number())
 		}
 		config.Prefix[i] = byte(r)
 	}
@@ -122,7 +122,7 @@ func main() {
 	client, err := shadowsocks.NewClient(&config)
 	if err != nil {
 		log.Errorf("Failed to construct Shadowsocks client: %v", err)
-		os.Exit(neterrors.IllegalConfiguration)
+		os.Exit(neterrors.IllegalConfiguration.Number())
 	}
 
 	if *args.checkConnectivity {
@@ -131,7 +131,7 @@ func main() {
 		if err != nil {
 			log.Errorf("Failed to perform connectivity checks: %v", err)
 		}
-		os.Exit(connErrCode)
+		os.Exit(connErrCode.Number())
 	}
 
 	// Open TUN device
@@ -139,7 +139,7 @@ func main() {
 	tunDevice, err := tun.OpenTunDevice(*args.tunName, *args.tunAddr, *args.tunGw, *args.tunMask, dnsResolvers, persistTun)
 	if err != nil {
 		log.Errorf("Failed to open TUN device: %v", err)
-		os.Exit(neterrors.SystemMisconfigured)
+		os.Exit(neterrors.SystemMisconfigured.Number())
 	}
 	// Output packets to TUN device
 	core.RegisterOutputFn(tunDevice.Write)
@@ -160,7 +160,7 @@ func main() {
 		_, err := io.CopyBuffer(lwipWriter, tunDevice, make([]byte, mtu))
 		if err != nil {
 			log.Errorf("Failed to write data to network stack: %v", err)
-			os.Exit(neterrors.Unexpected)
+			os.Exit(neterrors.Unexpected.Number())
 		}
 	}()
 
