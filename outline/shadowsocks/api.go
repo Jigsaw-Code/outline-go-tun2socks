@@ -22,6 +22,7 @@ import (
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/neterrors"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport/shadowsocks"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport/shadowsocks/client"
@@ -78,7 +79,7 @@ const reachabilityTimeout = 10 * time.Second
 // the current network. Parallelizes the execution of TCP and UDP checks, selects the appropriate
 // error code to return accounting for transient network failures.
 // Returns an error if an unexpected error ocurrs.
-func CheckConnectivity(client *Client) (int, error) {
+func CheckConnectivity(client *Client) (neterrors.Error, error) {
 	return connectivity.CheckConnectivity(client)
 }
 
