@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package outline
+package connectivity
 
 import (
 	"context"
@@ -21,6 +21,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/neterrors"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
 )
 
@@ -32,14 +34,45 @@ const (
 	bufferLength        = 512
 )
 
-// AuthenticationError is used to signal failed authentication to the Shadowsocks proxy.
-type AuthenticationError struct {
+// authenticationError is used to signal failed authentication to the Shadowsocks proxy.
+type authenticationError struct {
 	error
 }
 
-// ReachabilityError is used to signal an unreachable proxy.
-type ReachabilityError struct {
+// reachabilityError is used to signal an unreachable proxy.
+type reachabilityError struct {
 	error
+}
+
+// CheckConnectivity determines whether the Shadowsocks proxy can relay TCP and UDP traffic under
+// the current network. Parallelizes the execution of TCP and UDP checks, selects the appropriate
+// error code to return accounting for transient network failures.
+// Returns an error if an unexpected error ocurrs.
+func CheckConnectivity(client *outline.Client) (int, error) {
+	// Start asynchronous UDP support check.
+	udpChan := make(chan error)
+	go func() {
+		resolverAddr := &net.UDPAddr{IP: net.ParseIP("1.1.1.1"), Port: 53}
+		udpChan <- CheckUDPConnectivityWithDNS(client, resolverAddr)
+	}()
+	// Check whether the proxy is reachable and that the client is able to authenticate to the proxy
+	tcpErr := CheckTCPConnectivityWithHTTP(client, "http://example.com")
+	if tcpErr == nil {
+		udpErr := <-udpChan
+		if udpErr == nil {
+			return neterrors.NoError, nil
+		}
+		return neterrors.UDPConnectivity, nil
+	}
+	var authErr *authenticationError
+	var reachabilityErr *reachabilityError
+	if errors.As(tcpErr, &authErr) {
+		return neterrors.AuthenticationFailure, nil
+	} else if errors.As(tcpErr, &reachabilityErr) {
+		return neterrors.Unreachable, nil
+	}
+	// The error is not related to the connectivity checks.
+	return neterrors.Unexpected, tcpErr
 }
 
 // CheckUDPConnectivityWithDNS determines whether the Shadowsocks proxy represented by `client` and
@@ -88,17 +121,17 @@ func CheckTCPConnectivityWithHTTP(dialer transport.StreamDialer, targetURL strin
 	}
 	conn, err := dialer.Dial(ctx, targetAddr)
 	if err != nil {
-		return &ReachabilityError{err}
+		return &reachabilityError{err}
 	}
 	defer conn.Close()
 	conn.SetDeadline(deadline)
 	err = req.Write(conn)
 	if err != nil {
-		return &AuthenticationError{err}
+		return &authenticationError{err}
 	}
 	n, err := conn.Read(make([]byte, bufferLength))
 	if n == 0 && err != nil {
-		return &AuthenticationError{err}
+		return &authenticationError{err}
 	}
 	return nil
 }

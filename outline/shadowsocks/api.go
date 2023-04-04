@@ -15,13 +15,13 @@
 package shadowsocks
 
 import (
-	"errors"
 	"fmt"
 	"net"
 	"strconv"
 	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport/shadowsocks"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport/shadowsocks/client"
@@ -38,13 +38,7 @@ type Config struct {
 	Prefix     []byte
 }
 
-// Client provides a transparent container for [client.Client] that
-// is exportable (as an opaque object) via gobind.
-// It's used by the connectivity test and the tun2socks handlers.
-type Client struct {
-	transport.StreamDialer
-	transport.PacketListener
-}
+type Client = outline.Client
 
 // NewClient provides a gobind-compatible wrapper for [client.NewClient].
 func NewClient(config *Config) (*Client, error) {
@@ -75,25 +69,8 @@ func NewClient(config *Config) (*Client, error) {
 		return nil, fmt.Errorf("Failed to create PacketListener: %w", err)
 	}
 
-	return &Client{streamDialer, packetListener}, nil
+	return &outline.Client{StreamDialer: streamDialer, PacketListener: packetListener}, nil
 }
-
-// Outline error codes. Must be kept in sync with definitions in outline-client/cordova-plugin-outline/outlinePlugin.js
-const (
-	NoError                     = 0
-	Unexpected                  = 1
-	NoVPNPermissions            = 2
-	AuthenticationFailure       = 3
-	UDPConnectivity             = 4
-	Unreachable                 = 5
-	VpnStartFailure             = 6
-	IllegalConfiguration        = 7
-	ShadowsocksStartFailure     = 8
-	ConfigureSystemProxyFailure = 9
-	NoAdminPermissions          = 10
-	UnsupportedRoutingTable     = 11
-	SystemMisconfigured         = 12
-)
 
 const reachabilityTimeout = 10 * time.Second
 
@@ -102,30 +79,7 @@ const reachabilityTimeout = 10 * time.Second
 // error code to return accounting for transient network failures.
 // Returns an error if an unexpected error ocurrs.
 func CheckConnectivity(client *Client) (int, error) {
-	// Start asynchronous UDP support check.
-	udpChan := make(chan error)
-	go func() {
-		resolverAddr := &net.UDPAddr{IP: net.ParseIP("1.1.1.1"), Port: 53}
-		udpChan <- outline.CheckUDPConnectivityWithDNS(client, resolverAddr)
-	}()
-	// Check whether the proxy is reachable and that the client is able to authenticate to the proxy
-	tcpErr := outline.CheckTCPConnectivityWithHTTP(client, "http://example.com")
-	if tcpErr == nil {
-		udpErr := <-udpChan
-		if udpErr == nil {
-			return NoError, nil
-		}
-		return UDPConnectivity, nil
-	}
-	var authErr *outline.AuthenticationError
-	var reachabilityErr *outline.ReachabilityError
-	if errors.As(tcpErr, &authErr) {
-		return AuthenticationFailure, nil
-	} else if errors.As(tcpErr, &reachabilityErr) {
-		return Unreachable, nil
-	}
-	// The error is not related to the connectivity checks.
-	return Unexpected, tcpErr
+	return connectivity.CheckConnectivity(client)
 }
 
 // CheckServerReachable determines whether the server at `host:port` is reachable over TCP.

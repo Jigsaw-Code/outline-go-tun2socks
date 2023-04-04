@@ -17,7 +17,6 @@ package tun2socks
 import (
 	"runtime/debug"
 
-	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 	"github.com/eycorsican/go-tun2socks/common/log"
@@ -27,11 +26,6 @@ func init() {
 	// Conserve memory by increasing garbage collection frequency.
 	debug.SetGCPercent(10)
 	log.SetLevel(log.WARN)
-}
-
-// OutlineTunnel embeds the tun2socks.OutlineTunnel interface so it gets exported by gobind.
-type OutlineTunnel interface {
-	outline.Tunnel
 }
 
 // ConnectShadowsocksTunnel reads packets from a TUN device and routes it to a Shadowsocks proxy server.
@@ -46,12 +40,12 @@ type OutlineTunnel interface {
 //
 // Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled bool) (OutlineTunnel, error) {
+func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled bool) (Tunnel, error) {
 	tun, err := tunnel.MakeTunFile(fd)
 	if err != nil {
 		return nil, err
 	}
-	t, err := outline.NewTunnel(client, client, isUDPEnabled, tun)
+	t, err := newTunnel(client, client, isUDPEnabled, tun)
 	if err != nil {
 		return nil, err
 	}

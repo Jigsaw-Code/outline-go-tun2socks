@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package outline
+package connectivity
 
 import (
 	"context"
@@ -56,7 +56,7 @@ func TestCheckTCPConnectivityWithHTTP_FailReachability(t *testing.T) {
 	if err == nil {
 		t.Fail()
 	}
-	if _, ok := err.(*ReachabilityError); !ok {
+	if _, ok := err.(*reachabilityError); !ok {
 		t.Fatalf("Expected reachability error, got: %v", reflect.TypeOf(err))
 	}
 }
@@ -67,7 +67,7 @@ func TestCheckTCPConnectivityWithHTTP_FailAuthentication(t *testing.T) {
 	if err == nil {
 		t.Fail()
 	}
-	if _, ok := err.(*AuthenticationError); !ok {
+	if _, ok := err.(*authenticationError); !ok {
 		t.Fatalf("Expected authentication error, got: %v", reflect.TypeOf(err))
 	}
 }
