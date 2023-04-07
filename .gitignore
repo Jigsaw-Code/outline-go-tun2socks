@@ -25,3 +25,6 @@ intra/split/example/example
 Network Trash Folder
 Temporary Items
 .apdisk
+
+# IDEs
+.vscode/

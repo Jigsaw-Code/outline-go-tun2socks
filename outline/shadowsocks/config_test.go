@@ -1,4 +1,4 @@
-// Copyright 2022 The Outline Authors
+// Copyright 2023 The Outline Authors
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -60,44 +60,103 @@ func Test_ParseConfigFromJSON(t *testing.T) {
 			},
 		},
 		{
-			name:    "missing host",
-			input:   `{"port":12345,"method":"some-cipher","password":"abcd1234"}`,
-			wantErr: true,
+			name:  "missing host",
+			input: `{"port":12345,"method":"some-cipher","password":"abcd1234"}`,
+			want: &Config{
+				Host:       "",
+				Port:       12345,
+				CipherName: "some-cipher",
+				Password:   "abcd1234",
+				Prefix:     nil,
+			},
 		},
 		{
-			name:    "missing port",
-			input:   `{"host":"192.0.2.1","method":"some-cipher","password":"abcd1234"}`,
-			wantErr: true,
+			name:  "missing port",
+			input: `{"host":"192.0.2.1","method":"some-cipher","password":"abcd1234"}`,
+			want: &Config{
+				Host:       "192.0.2.1",
+				Port:       0,
+				CipherName: "some-cipher",
+				Password:   "abcd1234",
+				Prefix:     nil,
+			},
 		},
 		{
-			name:    "missing method",
-			input:   `{"host":"192.0.2.1","port":12345,"password":"abcd1234"}`,
-			wantErr: true,
+			name:  "missing method",
+			input: `{"host":"192.0.2.1","port":12345,"password":"abcd1234"}`,
+			want: &Config{
+				Host:       "192.0.2.1",
+				Port:       12345,
+				CipherName: "",
+				Password:   "abcd1234",
+				Prefix:     nil,
+			},
 		},
 		{
-			name:    "missing password",
-			input:   `{"host":"192.0.2.1","port":12345,"method":"some-cipher"}`,
-			wantErr: true,
+			name:  "missing password",
+			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher"}`,
+			want: &Config{
+				Host:       "192.0.2.1",
+				Port:       12345,
+				CipherName: "some-cipher",
+				Password:   "",
+				Prefix:     nil,
+			},
 		},
 		{
-			name:    "empty host",
-			input:   `{"host":"","port":12345,"method":"some-cipher","password":"abcd1234"}`,
-			wantErr: true,
+			name:  "empty host",
+			input: `{"host":"","port":12345,"method":"some-cipher","password":"abcd1234"}`,
+			want: &Config{
+				Host:       "",
+				Port:       12345,
+				CipherName: "some-cipher",
+				Password:   "abcd1234",
+				Prefix:     nil,
+			},
 		},
 		{
-			name:    "zero port",
-			input:   `{"host":"192.0.2.1","port":0,"method":"some-cipher","password":"abcd1234"}`,
-			wantErr: true,
+			name:  "zero port",
+			input: `{"host":"192.0.2.1","port":0,"method":"some-cipher","password":"abcd1234"}`,
+			want: &Config{
+				Host:       "192.0.2.1",
+				Port:       0,
+				CipherName: "some-cipher",
+				Password:   "abcd1234",
+				Prefix:     nil,
+			},
 		},
 		{
-			name:    "empty method",
-			input:   `{"host":"192.0.2.1","port":12345,"method":"","password":"abcd1234"}`,
-			wantErr: true,
+			name:  "empty method",
+			input: `{"host":"192.0.2.1","port":12345,"method":"","password":"abcd1234"}`,
+			want: &Config{
+				Host:       "192.0.2.1",
+				Port:       12345,
+				CipherName: "",
+				Password:   "abcd1234",
+				Prefix:     nil,
+			},
 		},
 		{
-			name:    "empty password",
-			input:   `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":""}`,
-			wantErr: true,
+			name:  "empty password",
+			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":""}`,
+			want: &Config{
+				Host:       "192.0.2.1",
+				Port:       12345,
+				CipherName: "some-cipher",
+				Password:   "",
+				Prefix:     nil,
+			},
+		},
+		{
+			name:  "empty prefix",
+			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234","prefix":""}`,
+			want: &Config{
+				Host:       "192.0.2.1",
+				Port:       12345,
+				CipherName: "some-cipher",
+				Password:   "abcd1234",
+				Prefix:     nil,
+			},
 		},
 		{
 			name:    "port -1",
@@ -109,12 +168,17 @@ func Test_ParseConfigFromJSON(t *testing.T) {
 			input:   `{"host":"192.0.2.1","port":65536,"method":"some-cipher","password":"abcd1234"}`,
 			wantErr: true,
 		},
+		{
+			name:    "prefix out-of-range",
+			input:   `{"host":"192.0.2.1","port":8080,"method":"some-cipher","password":"abcd1234","prefix":"\x1234"}`,
+			wantErr: true,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ParseConfigFromJSON(tt.input)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("newConfig() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("ParseConfigFromJSON() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if tt.wantErr {
@@ -125,7 +189,7 @@ func Test_ParseConfigFromJSON(t *testing.T) {
 				got.CipherName != tt.want.CipherName ||
 				got.Password != tt.want.Password ||
 				!bytes.Equal(got.Prefix, tt.want.Prefix) {
-				t.Errorf("newConfig() = %v, want %v", got, tt.want)
+				t.Errorf("ParseConfigFromJSON() = %v, want %v", got, tt.want)
 			}
 		})
 	}
