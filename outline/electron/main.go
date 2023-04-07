@@ -15,7 +15,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -26,10 +25,10 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/encoding/utf8"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/neterrors"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/proxy"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/tun2socks"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/shadowsocks"
 	"github.com/eycorsican/go-tun2socks/common/log"
 	_ "github.com/eycorsican/go-tun2socks/common/log/simple" // Register a simple logger.
 	"github.com/eycorsican/go-tun2socks/core"
@@ -93,40 +92,34 @@ func main() {
 
 	setLogLevel(*args.logLevel)
 
-	config := *args.proxyConfig
-	if len(config) == 0 {
-		// Validate legacy proxy flags
-		if *args.proxyHost == "" {
-			log.Errorf("Must provide a Shadowsocks proxy host name or IP address")
-			os.Exit(neterrors.IllegalConfiguration.Number())
-		} else if *args.proxyPort <= 0 || *args.proxyPort > 65535 {
-			log.Errorf("Must provide a valid Shadowsocks proxy port [1:65535]")
-			os.Exit(neterrors.IllegalConfiguration.Number())
-		} else if *args.proxyPassword == "" {
-			log.Errorf("Must provide a Shadowsocks proxy password")
-			os.Exit(neterrors.IllegalConfiguration.Number())
-		} else if *args.proxyCipher == "" {
-			log.Errorf("Must provide a Shadowsocks proxy encryption cipher")
-			os.Exit(neterrors.IllegalConfiguration.Number())
+	var config *shadowsocks.Config
+	if jsonConfig := *args.proxyConfig; len(jsonConfig) == 0 {
+		// legacy raw flags
+		config = &shadowsocks.Config{
+			Host:       *args.proxyHost,
+			Port:       *args.proxyPort,
+			Password:   *args.proxyPassword,
+			CipherName: *args.proxyCipher,
 		}
-
-		// Construct a JSON object from the deprecated flags.
-		configMap := make(map[string]interface{})
-		configMap["host"] = args.proxyHost
-		configMap["port"] = args.proxyPort
-		configMap["method"] = args.proxyCipher
-		configMap["password"] = args.proxyPassword
-		configMap["prefix"] = args.proxyPrefix
-
-		configBytes, err := json.Marshal(configMap)
+		if len(*args.proxyPrefix) > 0 {
+			prefix, err := utf8.DecodeCodepointsToBytes(*args.proxyPrefix)
+			if err != nil {
+				log.Errorf("Failed to parse prefix string: %v", err)
+				os.Exit(neterrors.IllegalConfiguration.Number())
+			}
+			config.Prefix = prefix
+		}
+	} else {
+		// JSON format flags
+		tConf, err := shadowsocks.ParseConfigFromJSON(jsonConfig)
 		if err != nil {
-			log.Errorf("Invalid proxy configuration flags: %v", err)
+			log.Errorf("Failed to parse configuration from JSON: %v", err)
 			os.Exit(neterrors.IllegalConfiguration.Number())
 		}
-		config = string(configBytes)
+		config = tConf
 	}
 
-	client, err := proxy.NewClient(config)
+	client, err := shadowsocks.NewClient(config)
 	if err != nil {
 		log.Errorf("Failed to construct Shadowsocks client: %v", err)
 		os.Exit(neterrors.IllegalConfiguration.Number())

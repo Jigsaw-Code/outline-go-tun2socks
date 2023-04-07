@@ -12,108 +12,51 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package proxy
+package shadowsocks
 
 import (
 	"bytes"
 	"testing"
 )
 
-func Test_extractPrefixBytes(t *testing.T) {
+func Test_ParseConfigFromJSON(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
-		want    []byte
-		wantErr bool
-	}{
-		{
-			name:  "basic",
-			input: "abc 123",
-			want:  []byte("abc 123"),
-		}, {
-			name:  "empty",
-			input: "",
-			want:  []byte{},
-		}, {
-			name:  "edge cases (explicit)",
-			input: "\x00\x01\x02 \x7e\x7f \xc2\x80\xc2\x81 \xc3\xbd\xc3\xbf",
-			want:  []byte("\x00\x01\x02 \x7e\x7f \x80\x81 \xfd\xff"),
-		}, {
-			name:  "edge cases (roundtrip)",
-			input: string([]rune{0, 1, 2, 126, 127, 128, 129, 254, 255}),
-			want:  []byte{0, 1, 2, 126, 127, 128, 129, 254, 255},
-		}, {
-			name:    "out of range 256",
-			input:   string([]rune{256}),
-			wantErr: true,
-		}, {
-			name:    "out of range 257",
-			input:   string([]rune{257}),
-			wantErr: true,
-		}, {
-			name:    "out of range 65537",
-			input:   string([]rune{65537}),
-			wantErr: true,
-		}, {
-			name:    "invalid UTF-8",
-			input:   "\xc3\x28",
-			wantErr: true,
-		}, {
-			name:    "invalid Unicode",
-			input:   "\xf8\xa1\xa1\xa1\xa1",
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got, err := extractPrefixBytes(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("extractPrefixBytes() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-			if !bytes.Equal(got, tt.want) {
-				t.Errorf("extractPrefixBytes() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_newConfig(t *testing.T) {
-	tests := []struct {
-		name    string
-		input   string
-		want    *configJSON
+		want    *Config
 		wantErr bool
 	}{
 		{
 			name:  "normal config",
 			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234"}`,
-			want: &configJSON{
-				Host:     "192.0.2.1",
-				Port:     12345,
-				Method:   "some-cipher",
-				Password: "abcd1234",
+			want: &Config{
+				Host:       "192.0.2.1",
+				Port:       12345,
+				CipherName: "some-cipher",
+				Password:   "abcd1234",
+				Prefix:     nil,
 			},
 		},
 		{
 			name:  "normal config with prefix",
 			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234","prefix":"abc 123"}`,
-			want: &configJSON{
-				Host:     "192.0.2.1",
-				Port:     12345,
-				Method:   "some-cipher",
-				Password: "abcd1234",
-				Prefix:   "abc 123",
+			want: &Config{
+				Host:       "192.0.2.1",
+				Port:       12345,
+				CipherName: "some-cipher",
+				Password:   "abcd1234",
+				Prefix:     []byte{97, 98, 99, 32, 49, 50, 51},
 			},
 		},
 		{
 			name:  "normal config with extra fields",
 			input: `{"extra_field":"ignored","host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234"}`,
-			want: &configJSON{
-				Host:     "192.0.2.1",
-				Port:     12345,
-				Method:   "some-cipher",
-				Password: "abcd1234",
+			want: &Config{
+				Host:       "192.0.2.1",
+				Port:       12345,
+				CipherName: "some-cipher",
+				Password:   "abcd1234",
+				Prefix:     nil,
 			},
 		},
 		{
@@ -169,7 +112,7 @@ func Test_newConfig(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := newConfig(tt.input)
+			got, err := ParseConfigFromJSON(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("newConfig() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -179,8 +122,9 @@ func Test_newConfig(t *testing.T) {
 			}
 			if got.Host != tt.want.Host ||
 				got.Port != tt.want.Port ||
-				got.Method != tt.want.Method ||
-				got.Prefix != tt.want.Prefix {
+				got.CipherName != tt.want.CipherName ||
+				got.Password != tt.want.Password ||
+				!bytes.Equal(got.Prefix, tt.want.Prefix) {
 				t.Errorf("newConfig() = %v, want %v", got, tt.want)
 			}
 		})

@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// This package provides support of Shadowsocks client and the configuration
+// that can be used by Outline Client.
+//
+// All data structures and functions will also be exposed as libraries that
+// non-golang callers can use (for example, C/Java/Objective-C).
 package shadowsocks
 
 import (
@@ -29,23 +34,15 @@ import (
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
-// Deprecated: Please use
-// [github.com/Jigsaw-Code/outline-go-tun2socks/outline/proxy] instead.
-
-// Config represents a shadowsocks server configuration.
-// Exported via gobind.
-type Config struct {
-	Host       string
-	Port       int
-	Password   string
-	CipherName string
-	Prefix     []byte
-}
-
+// [Exported] A Shadowsocks client that can be used by Outline-Apps
 type Client = outline.Client
 
-// NewClient provides a gobind-compatible wrapper for [client.NewClient].
+// [Exported] Create a new Shadowsocks client from a non-nil configuration.
 func NewClient(config *Config) (*Client, error) {
+	if err := validateConfig(config); err != nil {
+		return nil, fmt.Errorf("Invalid Shadowsocks configuration: %w", err)
+	}
+
 	// TODO: consider using net.LookupIP to get a list of IPs, and add logic for optimal selection.
 	proxyIP, err := net.ResolveIPAddr("ip", config.Host)
 	if err != nil {
@@ -74,6 +71,26 @@ func NewClient(config *Config) (*Client, error) {
 	}
 
 	return &outline.Client{StreamDialer: streamDialer, PacketListener: packetListener}, nil
+}
+
+// Validates a Shadowsocks server configuration object, returns nil if it is acceptable.
+func validateConfig(config *Config) error {
+	if config == nil {
+		return fmt.Errorf("config cannot be nil")
+	}
+	if len(config.Host) == 0 {
+		return fmt.Errorf("must provide a host name or IP address")
+	}
+	if config.Port <= 0 || config.Port > 65535 {
+		return fmt.Errorf("port must be within range [1..65535]")
+	}
+	if len(config.Password) == 0 {
+		return fmt.Errorf("must provide a password")
+	}
+	if len(config.CipherName) == 0 {
+		return fmt.Errorf("must provide an encryption cipher method")
+	}
+	return nil
 }
 
 const reachabilityTimeout = 10 * time.Second
