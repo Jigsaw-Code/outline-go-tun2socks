@@ -18,7 +18,7 @@ import (
 	"testing"
 )
 
-func Test_ParseConfigFromJSON(t *testing.T) {
+func Test_parseConfigFromJSON(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
