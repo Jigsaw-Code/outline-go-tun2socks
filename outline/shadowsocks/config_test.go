@@ -60,13 +60,13 @@ func Test_ParseConfigFromJSON(t *testing.T) {
 		},
 		{
 			name:  "unprintable prefix",
-			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234","prefix":"abc 123",prefix:"\x00\x80\xff"}`,
+			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234","prefix":"abc 123","prefix":"\u0000\u0080\u00ff"}`,
 			want: &configJSON{
 				Host:     "192.0.2.1",
 				Port:     12345,
 				Method:   "some-cipher",
 				Password: "abcd1234",
-				Prefix:   "\x00\x80\xff",
+				Prefix:   "\u0000\u0080\u00ff",
 			},
 		},
 		{

@@ -54,7 +54,7 @@ func NewClientFromJSON(configJSON string) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse Shadowsocks configuration JSON: %w", err)
 	}
-	return NewClientFromParameters(config.Host, config.Port, config.Method, config.Password, config.Prefix)
+	return NewClientFromParameters(config.Host, int(config.Port), config.Method, config.Password, config.Prefix)
 }
 
 // NewClientFromParameters creates a new Shadowsocks client from the parameters.

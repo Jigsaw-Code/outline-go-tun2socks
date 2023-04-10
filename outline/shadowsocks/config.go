@@ -36,7 +36,7 @@ type Config struct {
 // Must match the ShadowsocksSessionConfig interface defined in Outline Client.
 type configJSON struct {
 	Host     string `json:"host"`
-	Port     int    `json:"port"`
+	Port     uint16 `json:"port"`
 	Password string `json:"password"`
 	Method   string `json:"method"`
 	Prefix   string `json:"prefix"`

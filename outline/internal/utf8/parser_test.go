@@ -37,7 +37,13 @@ func Test_DecodeCodepointsToBytes(t *testing.T) {
 		}, {
 			name:  "edge cases (explicit)",
 			input: "\x00\x01\x02 \x7e\x7f \xc2\x80\xc2\x81 \xc3\xbd\xc3\xbf",
-			want:  []byte{0x00, 0x01, 0x02, 32, 0x7e, 0x7f, 32, 0xc2, 0x80, 0xc2, 0x81, 32, 0xc3, 0xbd, 0xc3, 0xbf},
+			// 0xc2+0x80/0x81 will be decoded to 0x80/0x81 (two-byte sequence)
+			// 0xc3+0xbd/0xbf will be decoded to 0xfd/0xff (two-byte sequence)
+			want: []byte{0x00, 0x01, 0x02, 32, 0x7e, 0x7f, 32, 0x80, 0x81, 32, 0xfd, 0xff},
+		}, {
+			name:  "unicode escapes",
+			input: "\u0000\u0080\u00ff",
+			want:  []byte{0x00, 0x80, 0xff},
 		}, {
 			name:  "edge cases (roundtrip)",
 			input: string([]rune{0, 1, 2, 126, 127, 128, 129, 254, 255}),
