@@ -29,7 +29,7 @@ func Test_DecodeCodepointsToBytes(t *testing.T) {
 		{
 			name:  "basic",
 			input: "abc 123",
-			want:  []byte("abc 123"),
+			want:  []byte{97, 98, 99, 32, 49, 50, 51},
 		}, {
 			name:  "empty",
 			input: "",
@@ -37,7 +37,7 @@ func Test_DecodeCodepointsToBytes(t *testing.T) {
 		}, {
 			name:  "edge cases (explicit)",
 			input: "\x00\x01\x02 \x7e\x7f \xc2\x80\xc2\x81 \xc3\xbd\xc3\xbf",
-			want:  []byte("\x00\x01\x02 \x7e\x7f \x80\x81 \xfd\xff"),
+			want:  []byte{0x00, 0x01, 0x02, 32, 0x7e, 0x7f, 32, 0xc2, 0x80, 0xc2, 0x81, 32, 0xc3, 0xbd, 0xc3, 0xbf},
 		}, {
 			name:  "edge cases (roundtrip)",
 			input: string([]rune{0, 1, 2, 126, 127, 128, 129, 254, 255}),

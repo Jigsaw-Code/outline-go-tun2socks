@@ -17,11 +17,13 @@ package shadowsocks
 import (
 	"encoding/json"
 	"fmt"
-
-	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/encoding/utf8"
 )
 
-// [Exported] Config represents a shadowsocks server configuration.
+// Config represents a (legacy) shadowsocks server configuration. You can use
+// NewClientFromJSON(string) instead.
+//
+// [Deprecated] this object will be removed once we migrated from the old
+// Outline Client logic.
 type Config struct {
 	Host       string
 	Port       int
@@ -34,34 +36,39 @@ type Config struct {
 // Must match the ShadowsocksSessionConfig interface defined in Outline Client.
 type configJSON struct {
 	Host     string `json:"host"`
-	Port     uint16 `json:"port"`
+	Port     int    `json:"port"`
 	Password string `json:"password"`
 	Method   string `json:"method"`
 	Prefix   string `json:"prefix"`
 }
 
-// [Exported] ParseConfigFromJSON parses a JSON string `in` as a Config object.
+// ParseConfigFromJSON parses a JSON string `in` as a configJSON object.
 // The JSON string `in` must match the ShadowsocksSessionConfig interface
 // defined in Outline Client.
-func ParseConfigFromJSON(in string) (*Config, error) {
-	var tConf configJSON
-	if err := json.Unmarshal([]byte(in), &tConf); err != nil {
+func parseConfigFromJSON(in string) (*configJSON, error) {
+	var conf configJSON
+	if err := json.Unmarshal([]byte(in), &conf); err != nil {
 		return nil, err
 	}
+	return &conf, nil
+}
 
-	config := Config{
-		Host:       tConf.Host,
-		Port:       int(tConf.Port),
-		Password:   tConf.Password,
-		CipherName: tConf.Method,
+// validateConfig validates whether a Shadowsocks server configuration is valid
+// (it won't do any connectivity tests)
+//
+// Returns nil if it is valid; or an error message.
+func validateConfig(host string, port int, cipher, password string) error {
+	if len(host) == 0 {
+		return fmt.Errorf("must provide a host name or IP address")
 	}
-
-	if len(tConf.Prefix) > 0 {
-		prefixBytes, err := utf8.DecodeCodepointsToBytes(tConf.Prefix)
-		if err != nil {
-			return nil, fmt.Errorf("invalid prefix: %w", err)
-		}
-		config.Prefix = prefixBytes
+	if port <= 0 || port > 65535 {
+		return fmt.Errorf("port must be within range [1..65535]")
 	}
-	return &config, nil
+	if len(cipher) == 0 {
+		return fmt.Errorf("must provide an encryption cipher method")
+	}
+	if len(password) == 0 {
+		return fmt.Errorf("must provide a password")
+	}
+	return nil
 }

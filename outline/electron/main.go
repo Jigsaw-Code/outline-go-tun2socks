@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/encoding/utf8"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/neterrors"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/tun2socks"
@@ -92,37 +91,23 @@ func main() {
 
 	setLogLevel(*args.logLevel)
 
-	var config *shadowsocks.Config
+	var client *shadowsocks.Client
 	if jsonConfig := *args.proxyConfig; len(jsonConfig) == 0 {
 		// legacy raw flags
-		config = &shadowsocks.Config{
-			Host:       *args.proxyHost,
-			Port:       *args.proxyPort,
-			Password:   *args.proxyPassword,
-			CipherName: *args.proxyCipher,
-		}
-		if len(*args.proxyPrefix) > 0 {
-			prefix, err := utf8.DecodeCodepointsToBytes(*args.proxyPrefix)
-			if err != nil {
-				log.Errorf("Failed to parse prefix string: %v", err)
-				os.Exit(neterrors.IllegalConfiguration.Number())
-			}
-			config.Prefix = prefix
+		if c, err := shadowsocks.NewClientFromParameters(*args.proxyHost, *args.proxyPort,
+			*args.proxyCipher, *args.proxyPassword, *args.proxyPrefix); err != nil {
+			log.Errorf("Failed to create Shadowsocks client: %v", err)
+			os.Exit(neterrors.IllegalConfiguration.Number())
+		} else {
+			client = c
 		}
 	} else {
-		// JSON format flags
-		tConf, err := shadowsocks.ParseConfigFromJSON(jsonConfig)
-		if err != nil {
-			log.Errorf("Failed to parse configuration from JSON: %v", err)
+		if c, err := shadowsocks.NewClientFromJSON(jsonConfig); err != nil {
+			log.Errorf("Failed to construct Shadowsocks client: %v", err)
 			os.Exit(neterrors.IllegalConfiguration.Number())
+		} else {
+			client = c
 		}
-		config = tConf
-	}
-
-	client, err := shadowsocks.NewClient(config)
-	if err != nil {
-		log.Errorf("Failed to construct Shadowsocks client: %v", err)
-		os.Exit(neterrors.IllegalConfiguration.Number())
 	}
 
 	if *args.checkConnectivity {

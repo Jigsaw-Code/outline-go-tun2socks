@@ -15,7 +15,6 @@
 package shadowsocks
 
 import (
-	"bytes"
 	"testing"
 )
 
@@ -23,139 +22,150 @@ func Test_ParseConfigFromJSON(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string
-		want    *Config
+		want    *configJSON
 		wantErr bool
 	}{
 		{
 			name:  "normal config",
 			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234"}`,
-			want: &Config{
-				Host:       "192.0.2.1",
-				Port:       12345,
-				CipherName: "some-cipher",
-				Password:   "abcd1234",
-				Prefix:     nil,
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     12345,
+				Method:   "some-cipher",
+				Password: "abcd1234",
+				Prefix:   "",
 			},
 		},
 		{
 			name:  "normal config with prefix",
 			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234","prefix":"abc 123"}`,
-			want: &Config{
-				Host:       "192.0.2.1",
-				Port:       12345,
-				CipherName: "some-cipher",
-				Password:   "abcd1234",
-				Prefix:     []byte{97, 98, 99, 32, 49, 50, 51},
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     12345,
+				Method:   "some-cipher",
+				Password: "abcd1234",
+				Prefix:   "abc 123",
 			},
 		},
 		{
 			name:  "normal config with extra fields",
 			input: `{"extra_field":"ignored","host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234"}`,
-			want: &Config{
-				Host:       "192.0.2.1",
-				Port:       12345,
-				CipherName: "some-cipher",
-				Password:   "abcd1234",
-				Prefix:     nil,
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     12345,
+				Method:   "some-cipher",
+				Password: "abcd1234",
+				Prefix:   "",
+			},
+		},
+		{
+			name:  "unprintable prefix",
+			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234","prefix":"abc 123",prefix:"\x00\x80\xff"}`,
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     12345,
+				Method:   "some-cipher",
+				Password: "abcd1234",
+				Prefix:   "\x00\x80\xff",
 			},
 		},
 		{
 			name:  "missing host",
 			input: `{"port":12345,"method":"some-cipher","password":"abcd1234"}`,
-			want: &Config{
-				Host:       "",
-				Port:       12345,
-				CipherName: "some-cipher",
-				Password:   "abcd1234",
-				Prefix:     nil,
+			want: &configJSON{
+				Host:     "",
+				Port:     12345,
+				Method:   "some-cipher",
+				Password: "abcd1234",
+				Prefix:   "",
 			},
 		},
 		{
 			name:  "missing port",
 			input: `{"host":"192.0.2.1","method":"some-cipher","password":"abcd1234"}`,
-			want: &Config{
-				Host:       "192.0.2.1",
-				Port:       0,
-				CipherName: "some-cipher",
-				Password:   "abcd1234",
-				Prefix:     nil,
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     0,
+				Method:   "some-cipher",
+				Password: "abcd1234",
+				Prefix:   "",
 			},
 		},
 		{
 			name:  "missing method",
 			input: `{"host":"192.0.2.1","port":12345,"password":"abcd1234"}`,
-			want: &Config{
-				Host:       "192.0.2.1",
-				Port:       12345,
-				CipherName: "",
-				Password:   "abcd1234",
-				Prefix:     nil,
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     12345,
+				Method:   "",
+				Password: "abcd1234",
+				Prefix:   "",
 			},
 		},
 		{
 			name:  "missing password",
 			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher"}`,
-			want: &Config{
-				Host:       "192.0.2.1",
-				Port:       12345,
-				CipherName: "some-cipher",
-				Password:   "",
-				Prefix:     nil,
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     12345,
+				Method:   "some-cipher",
+				Password: "",
+				Prefix:   "",
 			},
 		},
 		{
 			name:  "empty host",
 			input: `{"host":"","port":12345,"method":"some-cipher","password":"abcd1234"}`,
-			want: &Config{
-				Host:       "",
-				Port:       12345,
-				CipherName: "some-cipher",
-				Password:   "abcd1234",
-				Prefix:     nil,
+			want: &configJSON{
+				Host:     "",
+				Port:     12345,
+				Method:   "some-cipher",
+				Password: "abcd1234",
+				Prefix:   "",
 			},
 		},
 		{
 			name:  "zero port",
 			input: `{"host":"192.0.2.1","port":0,"method":"some-cipher","password":"abcd1234"}`,
-			want: &Config{
-				Host:       "192.0.2.1",
-				Port:       0,
-				CipherName: "some-cipher",
-				Password:   "abcd1234",
-				Prefix:     nil,
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     0,
+				Method:   "some-cipher",
+				Password: "abcd1234",
+				Prefix:   "",
 			},
 		},
 		{
 			name:  "empty method",
 			input: `{"host":"192.0.2.1","port":12345,"method":"","password":"abcd1234"}`,
-			want: &Config{
-				Host:       "192.0.2.1",
-				Port:       12345,
-				CipherName: "",
-				Password:   "abcd1234",
-				Prefix:     nil,
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     12345,
+				Method:   "",
+				Password: "abcd1234",
+				Prefix:   "",
 			},
 		},
 		{
 			name:  "empty password",
 			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":""}`,
-			want: &Config{
-				Host:       "192.0.2.1",
-				Port:       12345,
-				CipherName: "some-cipher",
-				Password:   "",
-				Prefix:     nil,
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     12345,
+				Method:   "some-cipher",
+				Password: "",
+				Prefix:   "",
 			},
 		},
 		{
 			name:  "empty prefix",
 			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234","prefix":""}`,
-			want: &Config{
-				Host:       "192.0.2.1",
-				Port:       12345,
-				CipherName: "some-cipher",
-				Password:   "abcd1234",
-				Prefix:     nil,
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     12345,
+				Method:   "some-cipher",
+				Password: "abcd1234",
+				Prefix:   "",
 			},
 		},
 		{
@@ -176,7 +186,7 @@ func Test_ParseConfigFromJSON(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := ParseConfigFromJSON(tt.input)
+			got, err := parseConfigFromJSON(tt.input)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ParseConfigFromJSON() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -186,9 +196,9 @@ func Test_ParseConfigFromJSON(t *testing.T) {
 			}
 			if got.Host != tt.want.Host ||
 				got.Port != tt.want.Port ||
-				got.CipherName != tt.want.CipherName ||
+				got.Method != tt.want.Method ||
 				got.Password != tt.want.Password ||
-				!bytes.Equal(got.Prefix, tt.want.Prefix) {
+				got.Prefix != tt.want.Prefix {
 				t.Errorf("ParseConfigFromJSON() = %v, want %v", got, tt.want)
 			}
 		})
