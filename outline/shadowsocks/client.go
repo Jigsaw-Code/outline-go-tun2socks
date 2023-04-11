@@ -40,7 +40,7 @@ type Client = outline.Client
 
 // NewClient creates a new Shadowsocks client from a non-nil configuration.
 //
-// [Deprecated] Please use NewClientFromJSON or NewClientFromParameters.
+// Deprecated: Please use [NewClientFromJSON].
 func NewClient(config *Config) (*Client, error) {
 	if config == nil {
 		return nil, fmt.Errorf("Shadowsocks configuration is required")
