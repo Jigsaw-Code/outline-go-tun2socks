@@ -22,7 +22,7 @@ import (
 // Config represents a (legacy) shadowsocks server configuration. You can use
 // NewClientFromJSON(string) instead.
 //
-// [Deprecated] this object will be removed once we migrated from the old
+// Deprecated: this object will be removed once we migrated from the old
 // Outline Client logic.
 type Config struct {
 	Host       string
