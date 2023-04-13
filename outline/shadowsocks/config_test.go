@@ -70,6 +70,17 @@ func Test_parseConfigFromJSON(t *testing.T) {
 			},
 		},
 		{
+			name:  "multi-byte utf-8 prefix",
+			input: `{"host":"192.0.2.1","port":12345,"method":"some-cipher","password":"abcd1234","prefix":"abc 123","prefix":"` + "\xc2\x80\xc2\x81\xc3\xbd\xc3\xbf" + `"}`,
+			want: &configJSON{
+				Host:     "192.0.2.1",
+				Port:     12345,
+				Method:   "some-cipher",
+				Password: "abcd1234",
+				Prefix:   "\u0080\u0081\u00fd\u00ff",
+			},
+		},
+		{
 			name:  "missing host",
 			input: `{"port":12345,"method":"some-cipher","password":"abcd1234"}`,
 			want: &configJSON{
@@ -199,7 +210,7 @@ func Test_parseConfigFromJSON(t *testing.T) {
 				got.Method != tt.want.Method ||
 				got.Password != tt.want.Password ||
 				got.Prefix != tt.want.Prefix {
-				t.Errorf("ParseConfigFromJSON() = %v, want %v", got, tt.want)
+				t.Errorf("ParseConfigFromJSON() = %v (prefix %+q), want %v (prefix %+q)", got, got.Prefix, tt.want, tt.want.Prefix)
 			}
 		})
 	}
