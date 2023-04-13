@@ -17,13 +17,13 @@ package utf8
 
 import "fmt"
 
-// DecodeCodepointsToBytes parses a UTF-8 string as a raw byte array. That is
-// to say, each codepoint in the Unicode string will be treated as a single
-// byte (must be in range 0x00 ~ 0xff).
+// DecodeUTF8CodepointsToRawBytes parses a UTF-8 string as a raw byte array.
+// That is to say, each codepoint in the Unicode string will be treated as a
+// single byte (must be in range 0x00 ~ 0xff).
 //
 // If a codepoint falls out of the range, an error will be returned.
-func DecodeCodepointsToBytes(s string) ([]byte, error) {
-	runes := []rune(s)
+func DecodeUTF8CodepointsToRawBytes(utf8Str string) ([]byte, error) {
+	runes := []rune(utf8Str)
 	rawBytes := make([]byte, len(runes))
 	for i, r := range runes {
 		if (r & 0xFF) != r {

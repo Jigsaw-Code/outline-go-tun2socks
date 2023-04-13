@@ -40,44 +40,33 @@ type Client = outline.Client
 
 // NewClient creates a new Shadowsocks client from a non-nil configuration.
 //
-// Deprecated: Please use [NewClientFromJSON].
+// Deprecated: Please use NewClientFromJSON.
 func NewClient(config *Config) (*Client, error) {
 	if config == nil {
 		return nil, fmt.Errorf("Shadowsocks configuration is required")
 	}
-	return newClient(config.Host, config.Port, config.CipherName, config.Password, config.Prefix)
+	return newShadowsocksClient(config.Host, config.Port, config.CipherName, config.Password, config.Prefix)
 }
 
-// NewClientFromJSON creates a new Shadowsocks client from a JSON formatted configuration.
+// NewClientFromJSON creates a new Shadowsocks client from a JSON formatted
+// configuration.
 func NewClientFromJSON(configJSON string) (*Client, error) {
 	config, err := parseConfigFromJSON(configJSON)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to parse Shadowsocks configuration JSON: %w", err)
 	}
-	return NewClientFromParameters(config.Host, int(config.Port), config.Method, config.Password, config.Prefix)
-}
-
-// NewClientFromParameters creates a new Shadowsocks client from the parameters.
-//
-//   - host specifies the hostname/IP of the Shadowsocks server
-//   - port specifies the port number of the Shadowsocks server
-//   - cipher and password specifies the encryption strategy
-//   - prefix is an optional string, it specifies the salt prefix used in the
-//     beginning of the session. The should be a UTF-8 encoded string with each
-//     codepoint representing a single byte (0x00 ~ 0xFF) in the salt prefix.
-func NewClientFromParameters(host string, port int, cipher, password string, prefix string) (*Client, error) {
 	var prefixBytes []byte = nil
-	if len(prefix) > 0 {
-		if p, err := utf8.DecodeCodepointsToBytes(prefix); err != nil {
+	if len(config.Prefix) > 0 {
+		if p, err := utf8.DecodeUTF8CodepointsToRawBytes(config.Prefix); err != nil {
 			return nil, fmt.Errorf("Failed to parse prefix string: %w", err)
 		} else {
 			prefixBytes = p
 		}
 	}
-	return newClient(host, port, cipher, password, prefixBytes)
+	return newShadowsocksClient(config.Host, int(config.Port), config.Method, config.Password, prefixBytes)
 }
 
-func newClient(host string, port int, cipherName, password string, prefix []byte) (*Client, error) {
+func newShadowsocksClient(host string, port int, cipherName, password string, prefix []byte) (*Client, error) {
 	if err := validateConfig(host, port, cipherName, password); err != nil {
 		return nil, fmt.Errorf("Invalid Shadowsocks configuration: %w", err)
 	}
