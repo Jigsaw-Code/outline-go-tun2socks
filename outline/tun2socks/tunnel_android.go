@@ -40,7 +40,7 @@ func init() {
 //
 // Returns an error if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled bool) (OutlineTunnel, error) {
+func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled bool) (Tunnel, error) {
 	tun, err := tunnel.MakeTunFile(fd)
 	if err != nil {
 		return nil, err
