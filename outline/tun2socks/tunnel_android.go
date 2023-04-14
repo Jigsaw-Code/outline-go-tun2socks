@@ -38,7 +38,7 @@ func init() {
 //   - `client` is the Shadowsocks client (created by [shadowsocks.NewClient]).
 //   - `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
-// Throws an exception if the TUN file descriptor cannot be opened, or if the tunnel fails to
+// Returns an error if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
 func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled bool) (Tunnel, error) {
 	tun, err := tunnel.MakeTunFile(fd)

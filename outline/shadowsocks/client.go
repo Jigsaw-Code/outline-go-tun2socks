@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// This package provides support of Shadowsocks client and the configuration
+// that can be used by Outline Client.
+//
+// All data structures and functions will also be exposed as libraries that
+// non-golang callers can use (for example, C/Java/Objective-C).
 package shadowsocks
 
 import (
@@ -22,6 +27,7 @@ import (
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/utf8"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/neterrors"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport/shadowsocks"
@@ -29,29 +35,51 @@ import (
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
-// Config represents a shadowsocks server configuration.
-// Exported via gobind.
-type Config struct {
-	Host       string
-	Port       int
-	Password   string
-	CipherName string
-	Prefix     []byte
-}
-
+// A client object that can be used to connect to a remote Shadowsocks proxy.
 type Client = outline.Client
 
-// NewClient provides a gobind-compatible wrapper for [client.NewClient].
+// NewClient creates a new Shadowsocks client from a non-nil configuration.
+//
+// Deprecated: Please use NewClientFromJSON.
 func NewClient(config *Config) (*Client, error) {
+	if config == nil {
+		return nil, fmt.Errorf("Shadowsocks configuration is required")
+	}
+	return newShadowsocksClient(config.Host, config.Port, config.CipherName, config.Password, config.Prefix)
+}
+
+// NewClientFromJSON creates a new Shadowsocks client from a JSON formatted
+// configuration.
+func NewClientFromJSON(configJSON string) (*Client, error) {
+	config, err := parseConfigFromJSON(configJSON)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to parse Shadowsocks configuration JSON: %w", err)
+	}
+	var prefixBytes []byte = nil
+	if len(config.Prefix) > 0 {
+		if p, err := utf8.DecodeUTF8CodepointsToRawBytes(config.Prefix); err != nil {
+			return nil, fmt.Errorf("Failed to parse prefix string: %w", err)
+		} else {
+			prefixBytes = p
+		}
+	}
+	return newShadowsocksClient(config.Host, int(config.Port), config.Method, config.Password, prefixBytes)
+}
+
+func newShadowsocksClient(host string, port int, cipherName, password string, prefix []byte) (*Client, error) {
+	if err := validateConfig(host, port, cipherName, password); err != nil {
+		return nil, fmt.Errorf("Invalid Shadowsocks configuration: %w", err)
+	}
+
 	// TODO: consider using net.LookupIP to get a list of IPs, and add logic for optimal selection.
-	proxyIP, err := net.ResolveIPAddr("ip", config.Host)
+	proxyIP, err := net.ResolveIPAddr("ip", host)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to resolve proxy address: %w", err)
 	}
-	proxyTCPEndpoint := transport.TCPEndpoint{RemoteAddr: net.TCPAddr{IP: proxyIP.IP, Port: config.Port}}
-	proxyUDPEndpoint := transport.UDPEndpoint{RemoteAddr: net.UDPAddr{IP: proxyIP.IP, Port: config.Port}}
+	proxyTCPEndpoint := transport.TCPEndpoint{RemoteAddr: net.TCPAddr{IP: proxyIP.IP, Port: port}}
+	proxyUDPEndpoint := transport.UDPEndpoint{RemoteAddr: net.UDPAddr{IP: proxyIP.IP, Port: port}}
 
-	cipher, err := shadowsocks.NewCipher(config.CipherName, config.Password)
+	cipher, err := shadowsocks.NewCipher(cipherName, password)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create Shadowsocks cipher: %w", err)
 	}
@@ -60,9 +88,9 @@ func NewClient(config *Config) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create StreamDialer: %w", err)
 	}
-	if len(config.Prefix) > 0 {
-		log.Debugf("Using salt prefix: %s", string(config.Prefix))
-		streamDialer.SetTCPSaltGenerator(client.NewPrefixSaltGenerator(config.Prefix))
+	if len(prefix) > 0 {
+		log.Debugf("Using salt prefix: %s", string(prefix))
+		streamDialer.SetTCPSaltGenerator(client.NewPrefixSaltGenerator(prefix))
 	}
 
 	packetListener, err := client.NewShadowsocksPacketListener(proxyUDPEndpoint, cipher)

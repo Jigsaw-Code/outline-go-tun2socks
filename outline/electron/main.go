@@ -24,7 +24,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/utf8"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/neterrors"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/tun2socks"
@@ -42,16 +42,21 @@ const (
 )
 
 var args struct {
-	tunAddr           *string
-	tunGw             *string
-	tunMask           *string
-	tunName           *string
-	tunDNS            *string
-	proxyHost         *string
-	proxyPort         *int
-	proxyPassword     *string
-	proxyCipher       *string
-	proxyPrefix       *string
+	tunAddr *string
+	tunGw   *string
+	tunMask *string
+	tunName *string
+	tunDNS  *string
+
+	// Deprecated: Use proxyConfig instead.
+	proxyHost     *string
+	proxyPort     *int
+	proxyPassword *string
+	proxyCipher   *string
+	proxyPrefix   *string
+
+	proxyConfig *string
+
 	logLevel          *string
 	checkConnectivity *bool
 	dnsFallback       *bool
@@ -71,6 +76,7 @@ func main() {
 	args.proxyPassword = flag.String("proxyPassword", "", "Shadowsocks proxy password")
 	args.proxyCipher = flag.String("proxyCipher", "chacha20-ietf-poly1305", "Shadowsocks proxy encryption cipher")
 	args.proxyPrefix = flag.String("proxyPrefix", "", "Shadowsocks connection prefix, UTF8-encoded (unsafe)")
+	args.proxyConfig = flag.String("proxyConfig", "", "A JSON object containing the proxy config, UTF8-encoded")
 	args.logLevel = flag.String("logLevel", "info", "Logging level: debug|info|warn|error|none")
 	args.dnsFallback = flag.Bool("dnsFallback", false, "Enable DNS fallback over TCP (overrides the UDP handler).")
 	args.checkConnectivity = flag.Bool("checkConnectivity", false, "Check the proxy TCP and UDP connectivity and exit.")
@@ -85,48 +91,14 @@ func main() {
 
 	setLogLevel(*args.logLevel)
 
-	// Validate proxy flags
-	if *args.proxyHost == "" {
-		log.Errorf("Must provide a Shadowsocks proxy host name or IP address")
-		os.Exit(neterrors.IllegalConfiguration.Number())
-	} else if *args.proxyPort <= 0 || *args.proxyPort > 65535 {
-		log.Errorf("Must provide a valid Shadowsocks proxy port [1:65535]")
-		os.Exit(neterrors.IllegalConfiguration.Number())
-	} else if *args.proxyPassword == "" {
-		log.Errorf("Must provide a Shadowsocks proxy password")
-		os.Exit(neterrors.IllegalConfiguration.Number())
-	} else if *args.proxyCipher == "" {
-		log.Errorf("Must provide a Shadowsocks proxy encryption cipher")
-		os.Exit(neterrors.IllegalConfiguration.Number())
-	}
-
-	config := shadowsocks.Config{
-		Host:       *args.proxyHost,
-		Port:       *args.proxyPort,
-		Password:   *args.proxyPassword,
-		CipherName: *args.proxyCipher,
-	}
-
-	// The prefix is an 8-bit-clean byte sequence, stored in the codepoint
-	// values of a unicode string, which arrives here encoded in UTF-8.
-	prefixRunes := []rune(*args.proxyPrefix)
-	config.Prefix = make([]byte, len(prefixRunes))
-	for i, r := range prefixRunes {
-		if (r & 0xFF) != r {
-			log.Errorf("Character out of range: %r", r)
-			os.Exit(neterrors.IllegalConfiguration.Number())
-		}
-		config.Prefix[i] = byte(r)
-	}
-
-	client, err := shadowsocks.NewClient(&config)
+	client, err := newShadowsocksClientFromArgs()
 	if err != nil {
-		log.Errorf("Failed to construct Shadowsocks client: %v", err)
+		log.Errorf("Failed to create Shadowsocks client: %v", err)
 		os.Exit(neterrors.IllegalConfiguration.Number())
 	}
 
 	if *args.checkConnectivity {
-		connErrCode, err := connectivity.CheckConnectivity(client)
+		connErrCode, err := shadowsocks.CheckConnectivity(client)
 		log.Debugf("Connectivity checks error code: %v", connErrCode)
 		if err != nil {
 			log.Errorf("Failed to perform connectivity checks: %v", err)
@@ -186,5 +158,29 @@ func setLogLevel(level string) {
 		log.SetLevel(log.NONE)
 	default:
 		log.SetLevel(log.INFO)
+	}
+}
+
+// newShadowsocksClientFromArgs creates a new shadowsocks.Client instance
+// from the global CLI argument object args.
+func newShadowsocksClientFromArgs() (*shadowsocks.Client, error) {
+	if jsonConfig := *args.proxyConfig; len(jsonConfig) > 0 {
+		return shadowsocks.NewClientFromJSON(jsonConfig)
+	} else {
+		// legacy raw flags
+		config := shadowsocks.Config{
+			Host:       *args.proxyHost,
+			Port:       *args.proxyPort,
+			CipherName: *args.proxyCipher,
+			Password:   *args.proxyPassword,
+		}
+		if prefixStr := *args.proxyPrefix; len(prefixStr) > 0 {
+			if p, err := utf8.DecodeUTF8CodepointsToRawBytes(prefixStr); err != nil {
+				return nil, fmt.Errorf("Failed to parse prefix string: %w", err)
+			} else {
+				config.Prefix = p
+			}
+		}
+		return shadowsocks.NewClient(&config)
 	}
 }
