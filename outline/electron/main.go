@@ -103,7 +103,7 @@ func main() {
 		if err != nil {
 			log.Errorf("Failed to perform connectivity checks: %v", err)
 		}
-		os.Exit(connErrCode.Number())
+		os.Exit(connErrCode)
 	}
 
 	// Open TUN device

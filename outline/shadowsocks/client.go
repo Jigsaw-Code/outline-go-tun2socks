@@ -28,7 +28,6 @@ import (
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/utf8"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/neterrors"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport/shadowsocks"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport/shadowsocks/client"
@@ -36,7 +35,12 @@ import (
 )
 
 // A client object that can be used to connect to a remote Shadowsocks proxy.
-type Client = outline.Client
+//
+// Somehow redundant because from it seems gomobile only recognizes a struct,
+// but not a type alias (i.e. type Client = outline.Client).
+type Client struct {
+	outline.Client
+}
 
 // NewClient creates a new Shadowsocks client from a non-nil configuration.
 //
@@ -98,7 +102,7 @@ func newShadowsocksClient(host string, port int, cipherName, password string, pr
 		return nil, fmt.Errorf("Failed to create PacketListener: %w", err)
 	}
 
-	return &outline.Client{StreamDialer: streamDialer, PacketListener: packetListener}, nil
+	return &Client{outline.Client{StreamDialer: streamDialer, PacketListener: packetListener}}, nil
 }
 
 const reachabilityTimeout = 10 * time.Second
@@ -107,8 +111,11 @@ const reachabilityTimeout = 10 * time.Second
 // the current network. Parallelizes the execution of TCP and UDP checks, selects the appropriate
 // error code to return accounting for transient network failures.
 // Returns an error if an unexpected error ocurrs.
-func CheckConnectivity(client *Client) (neterrors.Error, error) {
-	return connectivity.CheckConnectivity(client)
+//
+// Note: please make sure the return type is (int, error) for backward compatibility reason.
+func CheckConnectivity(client *Client) (int, error) {
+	netErr, err := connectivity.CheckConnectivity(&client.Client)
+	return netErr.Number(), err
 }
 
 // CheckServerReachable determines whether the server at `host:port` is reachable over TCP.
