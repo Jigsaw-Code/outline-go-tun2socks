@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package shadowsocks
+package outline
 
 import (
 	"testing"
 )
 
-func Test_parseConfigFromJSON(t *testing.T) {
+func Test_ParseConfigFromJSON(t *testing.T) {
 	tests := []struct {
 		name    string
 		input   string

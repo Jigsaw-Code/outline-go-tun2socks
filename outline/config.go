@@ -12,25 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package shadowsocks
+package outline
 
 import (
 	"encoding/json"
-	"fmt"
 )
-
-// Config represents a (legacy) shadowsocks server configuration. You can use
-// NewClientFromJSON(string) instead.
-//
-// Deprecated: this object will be removed once we migrated from the old
-// Outline Client logic.
-type Config struct {
-	Host       string
-	Port       int
-	Password   string
-	CipherName string
-	Prefix     []byte
-}
 
 // An internal data structure to be used by JSON deserialization.
 // Must match the ShadowsocksSessionConfig interface defined in Outline Client.
@@ -51,24 +37,4 @@ func parseConfigFromJSON(in string) (*configJSON, error) {
 		return nil, err
 	}
 	return &conf, nil
-}
-
-// validateConfig validates whether a Shadowsocks server configuration is valid
-// (it won't do any connectivity tests)
-//
-// Returns nil if it is valid; or an error message.
-func validateConfig(host string, port int, cipher, password string) error {
-	if len(host) == 0 {
-		return fmt.Errorf("must provide a host name or IP address")
-	}
-	if port <= 0 || port > 65535 {
-		return fmt.Errorf("port must be within range [1..65535]")
-	}
-	if len(cipher) == 0 {
-		return fmt.Errorf("must provide an encryption cipher method")
-	}
-	if len(password) == 0 {
-		return fmt.Errorf("must provide a password")
-	}
-	return nil
 }

@@ -15,6 +15,10 @@
 package outline
 
 import (
+	"fmt"
+
+	internal "github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/shadowsocks"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/utf8"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
 )
 
@@ -24,4 +28,29 @@ import (
 type Client struct {
 	transport.StreamDialer
 	transport.PacketListener
+}
+
+// NewShadowsocksClientFromJSON creates a new Shadowsocks client from a JSON
+// formatted configuration.
+func NewShadowsocksClientFromJSON(configJSON string) (*Client, error) {
+	config, err := parseConfigFromJSON(configJSON)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse Shadowsocks configuration JSON: %w", err)
+	}
+
+	var prefixBytes []byte = nil
+	if len(config.Prefix) > 0 {
+		if p, err := utf8.DecodeUTF8CodepointsToRawBytes(config.Prefix); err != nil {
+			return nil, fmt.Errorf("failed to parse prefix string: %w", err)
+		} else {
+			prefixBytes = p
+		}
+	}
+
+	sd, pl, err := internal.NewShadowsocksConn(config.Host, int(config.Port), config.Method, config.Password, prefixBytes)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Client{*sd, *pl}, nil
 }
