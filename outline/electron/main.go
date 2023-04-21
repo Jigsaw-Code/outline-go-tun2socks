@@ -167,7 +167,7 @@ func setLogLevel(level string) {
 // from the global CLI argument object args.
 func newShadowsocksClientFromArgs() (outline.Client, error) {
 	if jsonConfig := *args.proxyConfig; len(jsonConfig) > 0 {
-		return outline.NewShadowsocksClientFromJSON(jsonConfig)
+		return outline.NewClientFromJSON(jsonConfig)
 	} else {
 		// legacy raw flags
 		config := shadowsocks.Config{

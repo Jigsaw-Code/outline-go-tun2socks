@@ -16,7 +16,7 @@ package outline
 
 import "testing"
 
-func Test_NewShadowsocksClientFromJSON_Errors(t *testing.T) {
+func Test_NewClientFromJSON_Errors(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
@@ -68,7 +68,7 @@ func Test_NewShadowsocksClientFromJSON_Errors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewShadowsocksClientFromJSON(tt.input)
+			got, err := NewClientFromJSON(tt.input)
 			if err == nil || got != nil {
 				t.Errorf("NewClientFromJSON() expects an error, err = %v, got = %v", err, got)
 				return

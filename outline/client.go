@@ -30,9 +30,9 @@ type Client interface {
 	transport.PacketListener
 }
 
-// NewShadowsocksClientFromJSON creates a new Shadowsocks client from a JSON
+// NewClientFromJSON creates a new Shadowsocks client from a JSON
 // formatted configuration.
-func NewShadowsocksClientFromJSON(configJSON string) (Client, error) {
+func NewClientFromJSON(configJSON string) (Client, error) {
 	config, err := parseConfigFromJSON(configJSON)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Shadowsocks configuration JSON: %w", err)
