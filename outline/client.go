@@ -25,14 +25,14 @@ import (
 // Client provides a transparent container for [transport.StreamDialer] and [transport.PacketListener]
 // that is exportable (as an opaque object) via gobind.
 // It's used by the connectivity test and the tun2socks handlers.
-type Client struct {
+type Client interface {
 	transport.StreamDialer
 	transport.PacketListener
 }
 
 // NewShadowsocksClientFromJSON creates a new Shadowsocks client from a JSON
 // formatted configuration.
-func NewShadowsocksClientFromJSON(configJSON string) (*Client, error) {
+func NewShadowsocksClientFromJSON(configJSON string) (Client, error) {
 	config, err := parseConfigFromJSON(configJSON)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse Shadowsocks configuration JSON: %w", err)
@@ -47,10 +47,11 @@ func NewShadowsocksClientFromJSON(configJSON string) (*Client, error) {
 		}
 	}
 
-	sd, pl, err := internal.NewShadowsocksConn(config.Host, int(config.Port), config.Method, config.Password, prefixBytes)
+	c, err := internal.NewShadowsocksClient(config.Host, int(config.Port), config.Method, config.Password, prefixBytes)
 	if err != nil {
+		// A <nil> struct is not a <nil> interface
 		return nil, err
 	}
 
-	return &Client{*sd, *pl}, nil
+	return c, err
 }

@@ -25,7 +25,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
 	internal "github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/shadowsocks"
 )
 
@@ -45,7 +45,7 @@ type Config struct {
 // A client object that can be used to connect to a remote Shadowsocks proxy.
 //
 // Deprecated: Keep for backward compatibility only, please use outline.Client.
-type Client outline.Client
+type Client internal.ShadowsocksClient
 
 // NewClient creates a new Shadowsocks client from a non-nil configuration.
 //
@@ -55,20 +55,12 @@ func NewClient(config *Config) (*Client, error) {
 	if config == nil {
 		return nil, fmt.Errorf("Shadowsocks configuration is required")
 	}
-	sd, pl, err := internal.NewShadowsocksConn(config.Host, config.Port, config.CipherName, config.Password, config.Prefix)
+	c, err := internal.NewShadowsocksClient(config.Host, config.Port, config.CipherName, config.Password, config.Prefix)
 	if err != nil {
+		// A <nil> struct is not a <nil> interface
 		return nil, err
 	}
-	return &Client{*sd, *pl}, nil
-}
-
-// ToOutlineClient retrieves the internal outline.Client from a legacy
-// shadowsocks.Client instance. This function is only for migrating from the
-// legacy API to the new outline API.
-//
-// Deprecated: use outline.Client directly.
-func ToOutlineClient(client *Client) *outline.Client {
-	return (*outline.Client)(client)
+	return (*Client)(c), err
 }
 
 const reachabilityTimeout = 10 * time.Second
@@ -82,7 +74,7 @@ const reachabilityTimeout = 10 * time.Second
 //
 // Deprecated: Keep for backward compatibility only, please use outline.CheckConnectivity instead
 func CheckConnectivity(client *Client) (int, error) {
-	netErr, err := outline.CheckConnectivity(ToOutlineClient(client))
+	netErr, err := connectivity.CheckConnectivity(client)
 	return netErr.Number(), err
 }
 

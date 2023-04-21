@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package outline
+package connectivity
 
 import (
 	"context"
@@ -21,6 +21,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/neterrors"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
 )
@@ -47,7 +48,7 @@ type reachabilityError struct {
 // the current network. Parallelizes the execution of TCP and UDP checks, selects the appropriate
 // error code to return accounting for transient network failures.
 // Returns an error if an unexpected error ocurrs.
-func CheckConnectivity(client *Client) (neterrors.Error, error) {
+func CheckConnectivity(client outline.Client) (neterrors.Error, error) {
 	// Start asynchronous UDP support check.
 	udpChan := make(chan error)
 	go func() {

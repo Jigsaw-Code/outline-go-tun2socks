@@ -25,6 +25,7 @@ import (
 	"time"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/utf8"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/neterrors"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
@@ -99,7 +100,7 @@ func main() {
 	}
 
 	if *args.checkConnectivity {
-		connErrCode, err := outline.CheckConnectivity(client)
+		connErrCode, err := connectivity.CheckConnectivity(client)
 		log.Debugf("Connectivity checks error code: %v", connErrCode)
 		if err != nil {
 			log.Errorf("Failed to perform connectivity checks: %v", err)
@@ -164,7 +165,7 @@ func setLogLevel(level string) {
 
 // newShadowsocksClientFromArgs creates a new shadowsocks.Client instance
 // from the global CLI argument object args.
-func newShadowsocksClientFromArgs() (*outline.Client, error) {
+func newShadowsocksClientFromArgs() (outline.Client, error) {
 	if jsonConfig := *args.proxyConfig; len(jsonConfig) > 0 {
 		return outline.NewShadowsocksClientFromJSON(jsonConfig)
 	} else {
@@ -182,10 +183,6 @@ func newShadowsocksClientFromArgs() (*outline.Client, error) {
 				config.Prefix = p
 			}
 		}
-		ssClient, err := shadowsocks.NewClient(&config)
-		if err != nil {
-			return nil, err
-		}
-		return shadowsocks.ToOutlineClient(ssClient), nil
+		return shadowsocks.NewClient(&config)
 	}
 }

@@ -70,7 +70,7 @@ func Test_NewShadowsocksClientFromJSON_Errors(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := NewShadowsocksClientFromJSON(tt.input)
 			if err == nil || got != nil {
-				t.Errorf("NewClientFromJSON() expects an error, got = %v", got)
+				t.Errorf("NewClientFromJSON() expects an error, err = %v, got = %v", err, got)
 				return
 			}
 		})
