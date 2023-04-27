@@ -24,20 +24,15 @@ import (
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
-type ShadowsocksClient struct {
-	transport.StreamDialer
-	transport.PacketListener
-}
-
-func NewShadowsocksClient(host string, port int, cipherName, password string, prefix []byte) (*ShadowsocksClient, error) {
+func NewTransport(host string, port int, cipherName, password string, prefix []byte) (transport.StreamDialer, transport.PacketListener, error) {
 	if err := validateConfig(host, port, cipherName, password); err != nil {
-		return nil, fmt.Errorf("invalid shadowsocks configuration: %w", err)
+		return nil, nil, fmt.Errorf("invalid shadowsocks configuration: %w", err)
 	}
 
 	// TODO: consider using net.LookupIP to get a list of IPs, and add logic for optimal selection.
 	proxyIP, err := net.ResolveIPAddr("ip", host)
 	if err != nil {
-		return nil, fmt.Errorf("failed to resolve proxy address: %w", err)
+		return nil, nil, fmt.Errorf("failed to resolve proxy address: %w", err)
 	}
 
 	proxyTCPEndpoint := transport.TCPEndpoint{RemoteAddr: net.TCPAddr{IP: proxyIP.IP, Port: port}}
@@ -45,12 +40,12 @@ func NewShadowsocksClient(host string, port int, cipherName, password string, pr
 
 	cipher, err := shadowsocks.NewCipher(cipherName, password)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Shadowsocks cipher: %w", err)
+		return nil, nil, fmt.Errorf("failed to create Shadowsocks cipher: %w", err)
 	}
 
 	streamDialer, err := client.NewShadowsocksStreamDialer(proxyTCPEndpoint, cipher)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create StreamDialer: %w", err)
+		return nil, nil, fmt.Errorf("failed to create StreamDialer: %w", err)
 	}
 	if len(prefix) > 0 {
 		log.Debugf("Using salt prefix: %s", string(prefix))
@@ -59,10 +54,10 @@ func NewShadowsocksClient(host string, port int, cipherName, password string, pr
 
 	packetListener, err := client.NewShadowsocksPacketListener(proxyUDPEndpoint, cipher)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create PacketListener: %w", err)
+		return nil, nil, fmt.Errorf("failed to create PacketListener: %w", err)
 	}
 
-	return &ShadowsocksClient{streamDialer, packetListener}, nil
+	return streamDialer, packetListener, nil
 }
 
 // validateConfig validates whether a Shadowsocks server configuration is valid

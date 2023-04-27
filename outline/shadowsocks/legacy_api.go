@@ -25,8 +25,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
-	internal "github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/shadowsocks"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/shadowsocks"
 )
 
 // Config represents a (legacy) shadowsocks server configuration. You can use
@@ -45,22 +46,20 @@ type Config struct {
 // A client object that can be used to connect to a remote Shadowsocks proxy.
 //
 // Deprecated: Keep for backward compatibility only, please use outline.Client.
-type Client internal.ShadowsocksClient
+type Client outline.Client
 
 // NewClient creates a new Shadowsocks client from a non-nil configuration.
 //
-// Deprecated: Keep for backward compatibility only, please use
-// outline.NewClientFromJSON instead.
+// Deprecated: Keep for backward compatibility only.
 func NewClient(config *Config) (*Client, error) {
 	if config == nil {
 		return nil, fmt.Errorf("Shadowsocks configuration is required")
 	}
-	c, err := internal.NewShadowsocksClient(config.Host, config.Port, config.CipherName, config.Password, config.Prefix)
+	sd, pl, err := shadowsocks.NewTransport(config.Host, config.Port, config.CipherName, config.Password, config.Prefix)
 	if err != nil {
-		// A <nil> struct is not a <nil> interface
 		return nil, err
 	}
-	return (*Client)(c), err
+	return &Client{sd, pl}, err
 }
 
 const reachabilityTimeout = 10 * time.Second
@@ -72,9 +71,9 @@ const reachabilityTimeout = 10 * time.Second
 //
 // Note: please make sure the return type is (int, error) for backward compatibility reason.
 //
-// Deprecated: Keep for backward compatibility only, please use outline.CheckConnectivity instead
+// Deprecated: Keep for backward compatibility only.
 func CheckConnectivity(client *Client) (int, error) {
-	netErr, err := connectivity.CheckConnectivity(client)
+	netErr, err := connectivity.CheckConnectivity((*outline.Client)(client))
 	return netErr.Number(), err
 }
 
