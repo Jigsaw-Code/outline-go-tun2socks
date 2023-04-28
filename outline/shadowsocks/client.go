@@ -76,24 +76,27 @@ func newShadowsocksClient(host string, port int, cipherName, password string, pr
 	if err != nil {
 		return nil, fmt.Errorf("Failed to resolve proxy address: %w", err)
 	}
-	proxyTCPEndpoint := transport.TCPEndpoint{RemoteAddr: net.TCPAddr{IP: proxyIP.IP, Port: port}}
-	proxyUDPEndpoint := transport.UDPEndpoint{RemoteAddr: net.UDPAddr{IP: proxyIP.IP, Port: port}}
+	proxyAddress := net.JoinHostPort(proxyIP.String(), fmt.Sprint(port))
 
-	cipher, err := shadowsocks.NewCipher(cipherName, password)
+	cipher, err := shadowsocks.CipherByName(cipherName)
+	if err != nil {
+		return nil, err
+	}
+	cryptoKey, err := shadowsocks.NewEncryptionKey(cipher, password)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create Shadowsocks cipher: %w", err)
 	}
 
-	streamDialer, err := client.NewShadowsocksStreamDialer(proxyTCPEndpoint, cipher)
+	streamDialer, err := client.NewShadowsocksStreamDialer(&transport.TCPEndpoint{Address: proxyAddress}, cryptoKey)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create StreamDialer: %w", err)
 	}
 	if len(prefix) > 0 {
 		log.Debugf("Using salt prefix: %s", string(prefix))
-		streamDialer.SetTCPSaltGenerator(client.NewPrefixSaltGenerator(prefix))
+		streamDialer.SaltGenerator = client.NewPrefixSaltGenerator(prefix)
 	}
 
-	packetListener, err := client.NewShadowsocksPacketListener(proxyUDPEndpoint, cipher)
+	packetListener, err := client.NewShadowsocksPacketListener(&transport.UDPEndpoint{Address: proxyAddress}, cryptoKey)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to create PacketListener: %w", err)
 	}
