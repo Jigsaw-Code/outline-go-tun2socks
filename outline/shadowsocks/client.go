@@ -28,14 +28,13 @@ import (
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/utf8"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/neterrors"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
 	"github.com/Jigsaw-Code/outline-internal-sdk/transport/shadowsocks"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
 // A client object that can be used to connect to a remote Shadowsocks proxy.
-type Client = outline.Client
+type Client outline.Client
 
 // NewClient creates a new Shadowsocks client from a non-nil configuration.
 //
@@ -96,8 +95,25 @@ func newShadowsocksClient(host string, port int, cipherName, password string, pr
 		return nil, fmt.Errorf("failed to create PacketListener: %w", err)
 	}
 
-	return &outline.Client{StreamDialer: streamDialer, PacketListener: packetListener}, nil
+	return &Client{StreamDialer: streamDialer, PacketListener: packetListener}, nil
 }
+
+// Error number constants exported through gomobile
+const (
+	NoError                     = 0
+	Unexpected                  = 1
+	NoVPNPermissions            = 2 // Unused
+	AuthenticationFailure       = 3
+	UDPConnectivity             = 4
+	Unreachable                 = 5
+	VpnStartFailure             = 6  // Unused
+	IllegalConfiguration        = 7  // Electron only
+	ShadowsocksStartFailure     = 8  // Unused
+	ConfigureSystemProxyFailure = 9  // Unused
+	NoAdminPermissions          = 10 // Unused
+	UnsupportedRoutingTable     = 11 // Unused
+	SystemMisconfigured         = 12 // Electron only
+)
 
 const reachabilityTimeout = 10 * time.Second
 
@@ -105,8 +121,9 @@ const reachabilityTimeout = 10 * time.Second
 // the current network. Parallelizes the execution of TCP and UDP checks, selects the appropriate
 // error code to return accounting for transient network failures.
 // Returns an error if an unexpected error ocurrs.
-func CheckConnectivity(client *Client) (neterrors.Error, error) {
-	return connectivity.CheckConnectivity(client)
+func CheckConnectivity(client *Client) (int, error) {
+	errCode, err := connectivity.CheckConnectivity((*outline.Client)(client))
+	return int(errCode), err
 }
 
 // CheckServerReachable determines whether the server at `host:port` is reachable over TCP.
