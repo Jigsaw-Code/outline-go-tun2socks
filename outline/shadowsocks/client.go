@@ -123,7 +123,7 @@ const reachabilityTimeout = 10 * time.Second
 // Returns an error if an unexpected error ocurrs.
 func CheckConnectivity(client *Client) (int, error) {
 	errCode, err := connectivity.CheckConnectivity((*outline.Client)(client))
-	return int(errCode), err
+	return errCode.Number(), err
 }
 
 // CheckServerReachable determines whether the server at `host:port` is reachable over TCP.
