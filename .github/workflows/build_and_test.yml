@@ -78,9 +78,6 @@ jobs:
 
       - name: Build for Apple platforms
         run: make apple
-        
-      - name: Build future Apple library
-        run: make apple_future
 
   android:
     name: Android Build
