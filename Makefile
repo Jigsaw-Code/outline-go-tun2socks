@@ -26,23 +26,19 @@ $(BUILDDIR)/android/tun2socks.aar: $(GOMOBILE)
 	mkdir -p "$(BUILDDIR)/android"
 	$(ANDROID_BUILD_CMD) -o "$@" $(IMPORT_PATH)/outline/tun2socks $(IMPORT_PATH)/outline/shadowsocks
 
-apple_legacy: $(BUILDDIR)/apple_legacy/Tun2socks.xcframework
+# TODO(fortuna): -s strips symbols and is obsolete. Why are we using it?
+$(BUILDDIR)/ios/Tun2socks.xcframework: $(GOMOBILE)
+  # -iosversion should match what outline-client supports.
+	$(GOBIND) -iosversion=11.0 -target=ios,iossimulator -o $@ -ldflags '-s -w' -bundleid org.outline.tun2socks $(IMPORT_PATH)/outline/tun2socks $(IMPORT_PATH)/outline/shadowsocks
 
-$(BUILDDIR)/apple_legacy/Tun2socks.xcframework: $(GOMOBILE)
+$(BUILDDIR)/macos/Tun2socks.xcframework: $(GOMOBILE)
   # MACOSX_DEPLOYMENT_TARGET and -iosversion should match what outline-client supports.
-  # TODO(fortuna): -s strips symbols and is obsolete. Why are we using it?
-	export MACOSX_DEPLOYMENT_TARGET=10.14; $(GOBIND) -iosversion=11.0 -target=ios,iossimulator,macos -o $@ -ldflags '-s -w' -bundleid org.outline.tun2socks $(IMPORT_PATH)/outline/tun2socks $(IMPORT_PATH)/outline/shadowsocks
+	export MACOSX_DEPLOYMENT_TARGET=10.14; $(GOBIND) -iosversion=13.1 -target=macos,maccatalyst -o $@ -ldflags '-s -w' -bundleid org.outline.tun2socks $(IMPORT_PATH)/outline/tun2socks $(IMPORT_PATH)/outline/shadowsocks
 
-apple_future: $(BUILDDIR)/apple_future/Tun2socks.xcframework
+apple: $(BUILDDIR)/apple/Tun2socks.xcframework
 
-$(BUILDDIR)/apple_future/Tun2socks.xcframework: $(GOMOBILE)
-	$(GOBIND) -iosversion=13.1 -target=maccatalyst -o $@ -ldflags '-s -w' -bundleid org.outline.tun2socks $(IMPORT_PATH)/outline/tun2socks $(IMPORT_PATH)/outline/shadowsocks
-
-apple: apple_legacy apple_future $(BUILDDIR)/apple/Tun2socks.xcframework
-
-$(BUILDDIR)/apple/Tun2socks.xcframework:
-	find "$(BUILDDIR)/apple_legacy/Tun2socks.xcframework" "$(BUILDDIR)/apple_future/Tun2socks.xcframework" \
-		-name "Tun2socks.framework" -type d | xargs -I {} echo " -framework {} " | \
+$(BUILDDIR)/apple/Tun2socks.xcframework: $(BUILDDIR)/ios/Tun2socks.xcframework $(BUILDDIR)/macos/Tun2socks.xcframework
+	find $^ -name "Tun2socks.framework" -type d | xargs -I {} echo " -framework {} " | \
 		xargs xcrun xcodebuild -create-xcframework -output "$(BUILDDIR)/apple/Tun2socks.xcframework"
 
 XGO=$(GOBIN)/xgo
