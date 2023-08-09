@@ -39,7 +39,7 @@ apple: $(BUILDDIR)/apple/Tun2socks.xcframework
 
 $(BUILDDIR)/apple/Tun2socks.xcframework: $(BUILDDIR)/ios/Tun2socks.xcframework $(BUILDDIR)/macos/Tun2socks.xcframework
 	find $^ -name "Tun2socks.framework" -type d | xargs -I {} echo " -framework {} " | \
-		xargs xcrun xcodebuild -create-xcframework -output "$(BUILDDIR)/apple/Tun2socks.xcframework"
+		xargs xcrun xcodebuild -create-xcframework -output "$@"
 
 XGO=$(GOBIN)/xgo
 TUN2SOCKS_VERSION=v1.16.11
