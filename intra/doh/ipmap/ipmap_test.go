@@ -22,6 +22,10 @@ import (
 	"testing"
 )
 
+// We use '.' at the end to make sure resolution treats it an inexistent root domain.
+// It must not resolve to any address.
+const invalidDomain = "invaliddomain."
+
 func TestGetTwice(t *testing.T) {
 	m := NewIPMap(nil)
 	a := m.Get("example")
@@ -33,12 +37,12 @@ func TestGetTwice(t *testing.T) {
 
 func TestGetInvalid(t *testing.T) {
 	m := NewIPMap(nil)
-	s := m.Get("example")
+	s := m.Get(invalidDomain)
 	if !s.Empty() {
-		t.Error("Invalid name should result in an empty set")
+		t.Errorf("Invalid name should result in an empty set, got %v", s.ips)
 	}
 	if len(s.GetAll()) != 0 {
-		t.Error("Empty set should be empty")
+		t.Errorf("Empty set should be empty, got %v", s.GetAll())
 	}
 }
 
@@ -74,7 +78,7 @@ func TestGetIP(t *testing.T) {
 
 func TestAddDomain(t *testing.T) {
 	m := NewIPMap(nil)
-	s := m.Get("example")
+	s := m.Get(invalidDomain)
 	s.Add("www.google.com")
 	if s.Empty() {
 		t.Error("Google lookup failed")
@@ -89,7 +93,7 @@ func TestAddDomain(t *testing.T) {
 }
 func TestAddIP(t *testing.T) {
 	m := NewIPMap(nil)
-	s := m.Get("example")
+	s := m.Get(invalidDomain)
 	s.Add("192.0.2.1")
 	ips := s.GetAll()
 	if len(ips) != 1 {
@@ -121,7 +125,7 @@ func TestConfirmed(t *testing.T) {
 
 func TestConfirmNew(t *testing.T) {
 	m := NewIPMap(nil)
-	s := m.Get("example")
+	s := m.Get(invalidDomain)
 	s.Add("192.0.2.1")
 	// Confirm a new address.
 	s.Confirm(net.ParseIP("192.0.2.2"))
