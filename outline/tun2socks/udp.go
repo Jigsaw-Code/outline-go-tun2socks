@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	transport "github.com/Jigsaw-Code/outline-internal-sdk/transport"
+	transport "github.com/Jigsaw-Code/outline-sdk/transport"
 	"github.com/eycorsican/go-tun2socks/core"
 )
 

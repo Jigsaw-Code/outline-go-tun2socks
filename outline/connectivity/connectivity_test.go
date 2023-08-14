@@ -22,8 +22,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
-	"github.com/Jigsaw-Code/outline-internal-sdk/transport/shadowsocks"
+	"github.com/Jigsaw-Code/outline-sdk/transport"
+	"github.com/Jigsaw-Code/outline-sdk/transport/shadowsocks"
 )
 
 func TestCheckUDPConnectivityWithDNS_Success(t *testing.T) {

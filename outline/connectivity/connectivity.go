@@ -23,7 +23,7 @@ import (
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/neterrors"
-	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
+	"github.com/Jigsaw-Code/outline-sdk/transport"
 )
 
 // TODO: make these values configurable by exposing a struct with the connectivity methods.
