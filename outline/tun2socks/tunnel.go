@@ -23,7 +23,7 @@ import (
 	"github.com/eycorsican/go-tun2socks/core"
 	"github.com/eycorsican/go-tun2socks/proxy/dnsfallback"
 
-	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
+	"github.com/Jigsaw-Code/outline-sdk/transport"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"

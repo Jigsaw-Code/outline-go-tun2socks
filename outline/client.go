@@ -15,7 +15,7 @@
 package outline
 
 import (
-	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
+	"github.com/Jigsaw-Code/outline-sdk/transport"
 )
 
 // Client provides a transparent container for [transport.StreamDialer] and [transport.PacketListener]
