@@ -19,7 +19,6 @@ import (
 )
 
 // Client provides a transparent container for [transport.StreamDialer] and [transport.PacketListener]
-// that is exportable (as an opaque object) via gobind.
 // It's used by the connectivity test and the tun2socks handlers.
 type Client struct {
 	transport.StreamDialer

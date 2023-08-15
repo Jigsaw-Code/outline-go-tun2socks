@@ -48,15 +48,26 @@ type reachabilityError struct {
 // the current network. Parallelizes the execution of TCP and UDP checks, selects the appropriate
 // error code to return accounting for transient network failures.
 // Returns an error if an unexpected error ocurrs.
+//
+// Deprecated: keep for backward compatibility only.
 func CheckConnectivity(client *outline.Client) (neterrors.Error, error) {
+	return CheckTCPAndUDPConnectivity(client, client)
+}
+
+// CheckTCPAndUDPConnectivity determines whether the StreamDialer `sd` and
+// PacketListener `pl` relay TCP and UDP traffic under the current network.
+// Parallelizes the execution of TCP and UDP checks, selects the appropriate
+// error code to return accounting for transient network failures.
+// Returns an error if an unexpected error ocurrs.
+func CheckTCPAndUDPConnectivity(sd transport.StreamDialer, pl transport.PacketListener) (neterrors.Error, error) {
 	// Start asynchronous UDP support check.
 	udpChan := make(chan error)
 	go func() {
 		resolverAddr := &net.UDPAddr{IP: net.ParseIP("1.1.1.1"), Port: 53}
-		udpChan <- CheckUDPConnectivityWithDNS(client, resolverAddr)
+		udpChan <- CheckUDPConnectivityWithDNS(pl, resolverAddr)
 	}()
 	// Check whether the proxy is reachable and that the client is able to authenticate to the proxy
-	tcpErr := CheckTCPConnectivityWithHTTP(client, "http://example.com")
+	tcpErr := CheckTCPConnectivityWithHTTP(sd, "http://example.com")
 	if tcpErr == nil {
 		udpErr := <-udpChan
 		if udpErr == nil {

@@ -15,6 +15,8 @@
 package tun2socks
 
 import (
+	"errors"
+	"fmt"
 	"runtime/debug"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/shadowsocks"
@@ -40,7 +42,7 @@ func init() {
 //
 // Returns an error if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled bool) (Tunnel, error) {
+func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled bool) (OutlineTunnel, error) {
 	tun, err := tunnel.MakeTunFile(fd)
 	if err != nil {
 		return nil, err
@@ -51,4 +53,30 @@ func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled b
 	}
 	go tunnel.ProcessInputPackets(t, tun)
 	return t, nil
+}
+
+// ConnectTunnel reads packets from a TUN device represented by `fd` and routes
+// them to a remote proxy server represented by `configJSON`. This function
+// will also do connectivity tests before starting, so the caller is not
+// required to do any UDP tests.
+//
+// If the function succeeds, it will return a nil error and a Tunnel instance.
+//
+// This function does *not* take ownership of the TUN file descriptor `fd`; the
+// caller is responsible for closing after Tunnel disconnects.
+func ConnectTunnel(configJSON string, fd int) (Tunnel, error) {
+	if len(configJSON) == 0 {
+		return nil, errors.New("tunnel configuration is required")
+	}
+	tunDev, err := tunnel.MakeTunFile(fd)
+	if err != nil {
+		return nil, err
+	}
+	tn, err := newTunnelFromJSON(configJSON, tunDev)
+	if err != nil {
+		return nil, fmt.Errorf("unable to create tunnel from config: %w", err)
+	}
+
+	go tunnel.ProcessInputPackets(tn, tunDev)
+	return tn, nil
 }

@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package shadowsocks
+package tun2socks
 
 import "testing"
 
-func Test_NewClientFromJSON_Errors(t *testing.T) {
+func Test_newTunnelFromJSON_Errors(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
@@ -68,9 +68,9 @@ func Test_NewClientFromJSON_Errors(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := NewClientFromJSON(tt.input)
+			got, err := newTunnelFromJSON(tt.input, nil)
 			if err == nil || got != nil {
-				t.Errorf("NewClientFromJSON() expects an error, got = %v", got)
+				t.Errorf("NewClientFromJSON() expects an error, err = %v, got = %v", err, got)
 				return
 			}
 		})

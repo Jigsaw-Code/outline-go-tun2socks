@@ -34,11 +34,26 @@ import (
 )
 
 // A client object that can be used to connect to a remote Shadowsocks proxy.
+//
+// Deprecated: Keep for backward compatibility only
 type Client outline.Client
+
+// Config represents a (legacy) shadowsocks server configuration. You can use
+// NewClientFromJSON(string) instead.
+//
+// Deprecated: this object will be removed once we migrated from the old
+// Outline Client logic.
+type Config struct {
+	Host       string
+	Port       int
+	Password   string
+	CipherName string
+	Prefix     []byte
+}
 
 // NewClient creates a new Shadowsocks client from a non-nil configuration.
 //
-// Deprecated: Please use NewClientFromJSON.
+// Deprecated: Keep for backward compatibility only.
 func NewClient(config *Config) (*Client, error) {
 	if config == nil {
 		return nil, fmt.Errorf("shadowsocks configuration is required")
@@ -121,6 +136,8 @@ const reachabilityTimeout = 10 * time.Second
 // the current network. Parallelizes the execution of TCP and UDP checks, selects the appropriate
 // error code to return accounting for transient network failures.
 // Returns an error if an unexpected error ocurrs.
+//
+// Deprecated: Keep for backward compatibility only.
 func CheckConnectivity(client *Client) (int, error) {
 	errCode, err := connectivity.CheckConnectivity((*outline.Client)(client))
 	return errCode.Number(), err
@@ -128,6 +145,8 @@ func CheckConnectivity(client *Client) (int, error) {
 
 // CheckServerReachable determines whether the server at `host:port` is reachable over TCP.
 // Returns an error if the server is unreachable.
+//
+// Deprecated: Keep for backward compatibility only.
 func CheckServerReachable(host string, port int) error {
 	conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, strconv.Itoa(port)), reachabilityTimeout)
 	if err != nil {
