@@ -31,10 +31,10 @@ func init() {
 }
 
 // ConnectShadowsocksTunnel reads packets from a TUN device and routes it to a Shadowsocks proxy server.
-// Returns an OutlineTunnel instance and does *not* take ownership of the TUN file descriptor; the
-// caller is responsible for closing after OutlineTunnel disconnects.
+// Returns an Tunnel instance and does *not* take ownership of the TUN file descriptor; the caller is
+// responsible for closing after Tunnel disconnects.
 //
-//   - `fd` is the TUN device.  The OutlineTunnel acquires an additional reference to it, which
+//   - `fd` is the TUN device.  The Tunnel acquires an additional reference to it, which
 //     is released by OutlineTunnel.Disconnect(), so the caller must close `fd` _and_ call
 //     Disconnect() in order to close the TUN device.
 //   - `client` is the Shadowsocks client (created by [shadowsocks.NewClient]).
@@ -42,7 +42,7 @@ func init() {
 //
 // Returns an error if the TUN file descriptor cannot be opened, or if the tunnel fails to
 // connect.
-func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled bool) (OutlineTunnel, error) {
+func ConnectShadowsocksTunnel(fd int, client *shadowsocks.Client, isUDPEnabled bool) (Tunnel, error) {
 	tun, err := tunnel.MakeTunFile(fd)
 	if err != nil {
 		return nil, err

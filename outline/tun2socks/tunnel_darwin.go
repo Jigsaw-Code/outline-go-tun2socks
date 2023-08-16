@@ -43,14 +43,14 @@ func init() {
 }
 
 // ConnectShadowsocksTunnel reads packets from a TUN device and routes it to a Shadowsocks proxy server.
-// Returns an OutlineTunnel instance that should be used to input packets to the tunnel.
+// Returns an Tunnel instance that should be used to input packets to the tunnel.
 //
 // `tunWriter` is used to output packets to the TUN (VPN).
 // `client` is the Shadowsocks client (created by [shadowsocks.NewClient]).
 // `isUDPEnabled` indicates whether the tunnel and/or network enable UDP proxying.
 //
 // Sets an error if the tunnel fails to connect.
-func ConnectShadowsocksTunnel(tunWriter TunWriter, client *shadowsocks.Client, isUDPEnabled bool) (OutlineTunnel, error) {
+func ConnectShadowsocksTunnel(tunWriter TunWriter, client *shadowsocks.Client, isUDPEnabled bool) (Tunnel, error) {
 	if tunWriter == nil {
 		return nil, errors.New("must provide a TunWriter")
 	} else if client == nil {

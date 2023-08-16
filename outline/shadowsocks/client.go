@@ -20,6 +20,7 @@
 package shadowsocks
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"strconv"
@@ -27,9 +28,8 @@ import (
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/utf8"
-	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
-	"github.com/Jigsaw-Code/outline-internal-sdk/transport/shadowsocks"
+	"github.com/Jigsaw-Code/outline-sdk/transport"
+	"github.com/Jigsaw-Code/outline-sdk/transport/shadowsocks"
 	"github.com/eycorsican/go-tun2socks/common/log"
 )
 
@@ -56,53 +56,37 @@ type Config struct {
 // Deprecated: Keep for backward compatibility only.
 func NewClient(config *Config) (*Client, error) {
 	if config == nil {
-		return nil, fmt.Errorf("shadowsocks configuration is required")
+		return nil, errors.New("shadowsocks configuration is required")
 	}
-	return newShadowsocksClient(config.Host, config.Port, config.CipherName, config.Password, config.Prefix)
-}
-
-// NewClientFromJSON creates a new Shadowsocks client from a JSON formatted
-// configuration.
-func NewClientFromJSON(configJSON string) (*Client, error) {
-	config, err := parseConfigFromJSON(configJSON)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse Shadowsocks configuration JSON: %w", err)
+	if len(config.Host) == 0 {
+		return nil, errors.New("invalid configuration: host is required")
 	}
-	var prefixBytes []byte = nil
-	if len(config.Prefix) > 0 {
-		if p, err := utf8.DecodeUTF8CodepointsToRawBytes(config.Prefix); err != nil {
-			return nil, fmt.Errorf("failed to parse prefix string: %w", err)
-		} else {
-			prefixBytes = p
-		}
+	if config.Port <= 0 || config.Port >= 65535 {
+		return nil, fmt.Errorf("invalid configuration: port %v is not valid", config.Port)
 	}
-	return newShadowsocksClient(config.Host, int(config.Port), config.Method, config.Password, prefixBytes)
-}
-
-func newShadowsocksClient(host string, port int, cipherName, password string, prefix []byte) (*Client, error) {
-	if err := validateConfig(host, port, cipherName, password); err != nil {
-		return nil, fmt.Errorf("invalid Shadowsocks configuration: %w", err)
+	if len(config.Password) == 0 || len(config.CipherName) == 0 {
+		return nil, errors.New("invalid configuration: cipher name and password are required")
 	}
 
 	// TODO: consider using net.LookupIP to get a list of IPs, and add logic for optimal selection.
-	proxyIP, err := net.ResolveIPAddr("ip", host)
+	proxyIP, err := net.ResolveIPAddr("ip", config.Host)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve proxy address: %w", err)
 	}
-	proxyAddress := net.JoinHostPort(proxyIP.String(), fmt.Sprint(port))
+	proxyAddress := net.JoinHostPort(proxyIP.String(), fmt.Sprint(config.Port))
 
-	cryptoKey, err := shadowsocks.NewEncryptionKey(cipherName, password)
+	cryptoKey, err := shadowsocks.NewEncryptionKey(config.CipherName, config.Password)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Shadowsocks cipher: %w", err)
+		return nil, fmt.Errorf("failed to create cipher: %w", err)
 	}
 
 	streamDialer, err := shadowsocks.NewStreamDialer(&transport.TCPEndpoint{Address: proxyAddress}, cryptoKey)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create StreamDialer: %w", err)
 	}
-	if len(prefix) > 0 {
-		log.Debugf("Using salt prefix: %s", string(prefix))
-		streamDialer.SaltGenerator = shadowsocks.NewPrefixSaltGenerator(prefix)
+	if len(config.Prefix) > 0 {
+		log.Debugf("Using salt prefix: %s", string(config.Prefix))
+		streamDialer.SaltGenerator = shadowsocks.NewPrefixSaltGenerator(config.Prefix)
 	}
 
 	packetListener, err := shadowsocks.NewPacketListener(&transport.UDPEndpoint{Address: proxyAddress}, cryptoKey)

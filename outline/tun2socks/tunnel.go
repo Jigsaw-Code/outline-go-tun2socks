@@ -16,7 +16,6 @@ package tun2socks
 
 import (
 	"errors"
-	"fmt"
 	"io"
 	"net"
 	"time"
@@ -24,12 +23,9 @@ import (
 	"github.com/eycorsican/go-tun2socks/core"
 	"github.com/eycorsican/go-tun2socks/proxy/dnsfallback"
 
-	"github.com/Jigsaw-Code/outline-internal-sdk/transport"
+	"github.com/Jigsaw-Code/outline-sdk/transport"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/connectivity"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/shadowsocks"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/internal/utf8"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/outline/neterrors"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
 )
 
@@ -44,7 +40,7 @@ type Tunnel interface {
 }
 
 // Deprecated: use Tunnel directly.
-type OutlineTunnel Tunnel
+type OutlineTunnel = Tunnel
 
 type outlinetunnel struct {
 	tunnel.Tunnel
@@ -74,40 +70,6 @@ func newTunnel(streamDialer transport.StreamDialer, packetDialer transport.Packe
 	t := &outlinetunnel{base, lwipStack, streamDialer, packetDialer, isUDPEnabled}
 	t.registerConnectionHandlers()
 	return t, nil
-}
-
-// newTunnelFromJSON creates a new Tunnel to a remote proxy server from a JSON
-// formatted configuration. It will also do a connectivity test do determine
-// whether the remote proxy supports UDP.
-func newTunnelFromJSON(configJSON string, tunWriter io.WriteCloser) (Tunnel, error) {
-	config, err := parseConfigFromJSON(configJSON)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse Shadowsocks configuration JSON: %w", err)
-	}
-
-	var prefixBytes []byte = nil
-	if len(config.Prefix) > 0 {
-		if p, err := utf8.DecodeUTF8CodepointsToRawBytes(config.Prefix); err != nil {
-			return nil, fmt.Errorf("failed to parse prefix string: %w", err)
-		} else {
-			prefixBytes = p
-		}
-	}
-
-	sd, pl, err := shadowsocks.NewTransport(config.Host, int(config.Port), config.Method, config.Password, prefixBytes)
-	if err != nil {
-		return nil, err
-	}
-
-	neterr, err := connectivity.CheckTCPAndUDPConnectivity(sd, pl)
-	if err != nil {
-		return nil, fmt.Errorf("proxy connectivity test failed: %w", err)
-	}
-	if neterr != neterrors.NoError && neterr != neterrors.UDPConnectivity {
-		return nil, fmt.Errorf("proxy connectivity test failed: neterr = %v", neterr)
-	}
-
-	return newTunnel(sd, pl, neterr == neterrors.NoError, tunWriter)
 }
 
 func (t *outlinetunnel) UpdateUDPSupport() bool {
