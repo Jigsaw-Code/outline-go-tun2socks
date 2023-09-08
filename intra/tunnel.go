@@ -16,16 +16,16 @@ package intra
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"os"
 	"strings"
-	"time"
-
-	"github.com/eycorsican/go-tun2socks/core"
 
 	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/doh"
-	"github.com/Jigsaw-Code/outline-go-tun2socks/tunnel"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/protect"
+	"github.com/Jigsaw-Code/outline-sdk/network"
+	"github.com/Jigsaw-Code/outline-sdk/network/lwip2transport"
 )
 
 // Listener receives usage statistics when a UDP or TCP socket is closed,
@@ -37,95 +37,85 @@ type Listener interface {
 }
 
 // Tunnel represents an Intra session.
-type Tunnel interface {
-	tunnel.Tunnel
-	// Get the DNSTransport (default: nil).
-	GetDNS() doh.Transport
-	// Set the DNSTransport.  This method must be called before connecting the transport
-	// to the TUN device.  The transport can be changed at any time during operation, but
-	// must not be nil.
-	SetDNS(doh.Transport)
-	// When set to true, Intra will pre-emptively split all HTTPS connections.
-	SetAlwaysSplitHTTPS(bool)
-	// Enable reporting of SNIs that resulted in connection failures, using the
-	// Choir library for privacy-preserving error reports.  `file` is the path
-	// that Choir should use to store its persistent state, `suffix` is the
-	// authoritative domain to which reports will be sent, and `country` is a
-	// two-letter ISO country code for the user's current location.
-	EnableSNIReporter(file, suffix, country string) error
-}
+type Tunnel struct {
+	network.IPDevice
 
-type intratunnel struct {
-	tunnel.Tunnel
-	tcp TCPHandler
-	udp UDPHandler
-	dns doh.Transport
+	sd  *intraStreamDialer
+	pp  *intraPacketProxy
+	sni *tcpSNIReporter
+	tun io.Closer
 }
 
 // NewTunnel creates a connected Intra session.
 //
 // `fakedns` is the DNS server (IP and port) that will be used by apps on the TUN device.
-//    This will normally be a reserved or remote IP address, port 53.
+//
+//	This will normally be a reserved or remote IP address, port 53.
+//
 // `udpdns` and `tcpdns` are the actual location of the DNS server in use.
-//    These will normally be localhost with a high-numbered port.
+//
+//	These will normally be localhost with a high-numbered port.
+//
 // `dohdns` is the initial DOH transport.
-// `tunWriter` is the downstream VPN tunnel.  IntraTunnel.Disconnect() will close `tunWriter`.
-// `dialer` and `config` will be used for all network activity.
 // `listener` will be notified at the completion of every tunneled socket.
-func NewTunnel(fakedns string, dohdns doh.Transport, tunWriter io.WriteCloser, dialer *net.Dialer, config *net.ListenConfig, listener Listener) (Tunnel, error) {
-	if tunWriter == nil {
-		return nil, errors.New("Must provide a valid TUN writer")
+func NewTunnel(fakedns string, dohdns doh.Transport, tun io.Closer, protector protect.Protector, listener Listener) (t *Tunnel, err error) {
+	if listener == nil {
+		return nil, errors.New("listener is required")
 	}
-	core.RegisterOutputFn(tunWriter.Write)
-	t := &intratunnel{
-		Tunnel: tunnel.NewTunnel(tunWriter, core.NewLWIPStack()),
+
+	fakeDNSAddr, err := net.ResolveUDPAddr("udp", fakedns)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve fakedns: %w", err)
 	}
-	if err := t.registerConnectionHandlers(fakedns, dialer, config, listener); err != nil {
-		return nil, err
+
+	t = &Tunnel{
+		sni: &tcpSNIReporter{
+			dns: dohdns,
+		},
+		tun: tun,
 	}
+
+	t.sd, err = makeIntraStreamDialer(fakeDNSAddr.AddrPort(), dohdns, protector, listener, t.sni)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create stream dialer: %w", err)
+	}
+
+	t.pp, err = makeIntraPacketProxy(fakeDNSAddr.AddrPort(), dohdns, protector, listener)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create packet proxy: %w", err)
+	}
+
+	if t.IPDevice, err = lwip2transport.ConfigureDevice(t.sd, t.pp); err != nil {
+		return nil, fmt.Errorf("failed to configure lwIP stack: %w", err)
+	}
+
 	t.SetDNS(dohdns)
-	return t, nil
+	return
 }
 
-// Registers Intra's custom UDP and TCP connection handlers to the tun2socks core.
-func (t *intratunnel) registerConnectionHandlers(fakedns string, dialer *net.Dialer, config *net.ListenConfig, listener Listener) error {
-	// RFC 4787 REQ-5 requires a timeout no shorter than 5 minutes.
-	timeout, _ := time.ParseDuration("5m")
-
-	udpfakedns, err := net.ResolveUDPAddr("udp", fakedns)
-	if err != nil {
-		return err
-	}
-	t.udp = NewUDPHandler(*udpfakedns, timeout, config, listener)
-	core.RegisterUDPConnHandler(t.udp)
-
-	tcpfakedns, err := net.ResolveTCPAddr("tcp", fakedns)
-	if err != nil {
-		return err
-	}
-	t.tcp = NewTCPHandler(*tcpfakedns, dialer, listener)
-	core.RegisterTCPConnHandler(t.tcp)
-	return nil
+// Set the DNSTransport.  This method must be called before connecting the transport
+// to the TUN device.  The transport can be changed at any time during operation, but
+// must not be nil.
+func (t *Tunnel) SetDNS(dns doh.Transport) {
+	t.sd.SetDNS(dns)
+	t.pp.SetDNS(dns)
+	t.sni.SetDNS(dns)
 }
 
-func (t *intratunnel) SetDNS(dns doh.Transport) {
-	t.dns = dns
-	t.udp.SetDNS(dns)
-	t.tcp.SetDNS(dns)
-}
-
-func (t *intratunnel) GetDNS() doh.Transport {
-	return t.dns
-}
-
-func (t *intratunnel) SetAlwaysSplitHTTPS(s bool) {
-	t.tcp.SetAlwaysSplitHTTPS(s)
-}
-
-func (t *intratunnel) EnableSNIReporter(filename, suffix, country string) error {
+// Enable reporting of SNIs that resulted in connection failures, using the
+// Choir library for privacy-preserving error reports.  `file` is the path
+// that Choir should use to store its persistent state, `suffix` is the
+// authoritative domain to which reports will be sent, and `country` is a
+// two-letter ISO country code for the user's current location.
+func (t *Tunnel) EnableSNIReporter(filename, suffix, country string) error {
 	f, err := os.OpenFile(filename, os.O_RDWR|os.O_CREATE, 0600)
 	if err != nil {
 		return err
 	}
-	return t.tcp.EnableSNIReporter(f, suffix, strings.ToLower(country))
+	return t.sni.Configure(f, suffix, strings.ToLower(country))
+}
+
+func (t *Tunnel) Disconnect() {
+	t.Close()
+	t.tun.Close()
 }

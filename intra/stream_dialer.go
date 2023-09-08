@@ -1,0 +1,109 @@
+// Copyright 2023 Jigsaw Operations LLC
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//      http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package intra
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"log"
+	"net"
+	"net/netip"
+	"sync/atomic"
+	"time"
+
+	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/doh"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/protect"
+	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/split"
+	"github.com/Jigsaw-Code/outline-sdk/transport"
+)
+
+type intraStreamDialer struct {
+	fakeDNSAddr      netip.AddrPort
+	dns              atomic.Pointer[doh.Transport]
+	dialer           *net.Dialer
+	alwaysSplitHTTPS atomic.Bool
+	listener         TCPListener
+	sniReporter      *tcpSNIReporter
+}
+
+var _ transport.StreamDialer = (*intraStreamDialer)(nil)
+
+func makeIntraStreamDialer(fakeDNS netip.AddrPort, dns doh.Transport, protector protect.Protector, listener TCPListener, sniReporter *tcpSNIReporter) (*intraStreamDialer, error) {
+	if dns == nil {
+		return nil, errors.New("dns is required")
+	}
+
+	dohsd := &intraStreamDialer{
+		fakeDNSAddr: fakeDNS,
+		dialer:      protect.MakeDialer(protector),
+		listener:    listener,
+		sniReporter: sniReporter,
+	}
+	dohsd.dns.Store(&dns)
+	return dohsd, nil
+}
+
+// Dial implements StreamDialer.Dial.
+func (sd *intraStreamDialer) Dial(ctx context.Context, raddr string) (transport.StreamConn, error) {
+	log.Printf("[debug] Dialing TCP traffic to %v\n", raddr)
+	dest, err := netip.ParseAddrPort(raddr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid raddr (%v): %w", raddr, err)
+	}
+
+	if dest == sd.fakeDNSAddr {
+		log.Println("[debug] Doing DoT request over DoH server...")
+		return makeDoHQueryStreamConn(*sd.dns.Load()), nil
+	}
+
+	stats := makeTCPSocketSummary(dest)
+	beforeConn := time.Now()
+	conn, err := sd.dial(ctx, dest, stats)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dial to target: %w", err)
+	}
+	stats.Synack = int32(time.Since(beforeConn).Milliseconds())
+
+	return makeTCPWrapConn(conn, stats, sd.listener, sd.sniReporter), nil
+}
+
+func (sd *intraStreamDialer) SetDNS(dns doh.Transport) error {
+	if dns == nil {
+		return errors.New("dns is required")
+	}
+	sd.dns.Store(&dns)
+	return nil
+}
+
+func (sd *intraStreamDialer) dial(ctx context.Context, dest netip.AddrPort, stats *TCPSocketSummary) (transport.StreamConn, error) {
+	if dest.Port() == 443 {
+		log.Println("[debug] Dialing HTTPS traffic")
+		if sd.alwaysSplitHTTPS.Load() {
+			log.Println("[debug] Dialing TCP traffic over split dialer")
+			return split.DialWithSplit(sd.dialer, net.TCPAddrFromAddrPort(dest))
+		} else {
+			log.Println("[debug] Dialing TCP traffic over retryable split dialer")
+			stats.Retry = &split.RetryStats{}
+			return split.DialWithSplitRetry(sd.dialer, net.TCPAddrFromAddrPort(dest), stats.Retry)
+		}
+	} else {
+		log.Println("[debug] Dialing TCP traffic directly over internet")
+		tcpsd := &transport.TCPStreamDialer{
+			Dialer: *sd.dialer,
+		}
+		return tcpsd.Dial(ctx, dest.String())
+	}
+}
