@@ -45,7 +45,6 @@ func makeIntraPacketProxy(fakeDNS netip.AddrPort, dns doh.Transport, protector p
 
 	pl := &transport.UDPPacketListener{
 		ListenConfig: *protect.MakeListenConfig(protector),
-		Address:      ":0",
 	}
 
 	// TODO: add timeout option in SDK so we can configure the timeout to 5 minutes
