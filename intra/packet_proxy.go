@@ -38,7 +38,9 @@ type intraPacketProxy struct {
 
 var _ network.PacketProxy = (*intraPacketProxy)(nil)
 
-func makeIntraPacketProxy(fakeDNS netip.AddrPort, dns doh.Transport, protector protect.Protector, listener UDPListener) (*intraPacketProxy, error) {
+func newIntraPacketProxy(
+	fakeDNS netip.AddrPort, dns doh.Transport, protector protect.Protector, listener UDPListener,
+) (*intraPacketProxy, error) {
 	if dns == nil {
 		return nil, errors.New("dns is required")
 	}
@@ -47,9 +49,8 @@ func makeIntraPacketProxy(fakeDNS netip.AddrPort, dns doh.Transport, protector p
 		ListenConfig: *protect.MakeListenConfig(protector),
 	}
 
-	// TODO: add timeout option in SDK so we can configure the timeout to 5 minutes
 	// RFC 4787 REQ-5 requires a timeout no shorter than 5 minutes.
-	pp, err := network.NewPacketProxyFromPacketListener(pl)
+	pp, err := network.NewPacketProxyFromPacketListener(pl, network.WithPacketListenerWriteIdleTimeout(5*time.Minute))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create packet proxy from listener: %w", err)
 	}

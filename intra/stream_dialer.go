@@ -41,7 +41,13 @@ type intraStreamDialer struct {
 
 var _ transport.StreamDialer = (*intraStreamDialer)(nil)
 
-func makeIntraStreamDialer(fakeDNS netip.AddrPort, dns doh.Transport, protector protect.Protector, listener TCPListener, sniReporter *tcpSNIReporter) (*intraStreamDialer, error) {
+func newIntraStreamDialer(
+	fakeDNS netip.AddrPort,
+	dns doh.Transport,
+	protector protect.Protector,
+	listener TCPListener,
+	sniReporter *tcpSNIReporter,
+) (*intraStreamDialer, error) {
 	if dns == nil {
 		return nil, errors.New("dns is required")
 	}
@@ -66,7 +72,9 @@ func (sd *intraStreamDialer) Dial(ctx context.Context, raddr string) (transport.
 
 	if dest == sd.fakeDNSAddr {
 		log.Println("[debug] Doing DoT request over DoH server...")
-		return makeDoHQueryStreamConn(*sd.dns.Load()), nil
+		src, dst := net.Pipe()
+		go doh.Accept(*sd.dns.Load(), dst)
+		return newStreamConnFromPipeConns(src, dst)
 	}
 
 	stats := makeTCPSocketSummary(dest)
@@ -106,4 +114,36 @@ func (sd *intraStreamDialer) dial(ctx context.Context, dest netip.AddrPort, stat
 		}
 		return tcpsd.Dial(ctx, dest.String())
 	}
+}
+
+// transport.StreamConn wrapper around net.Pipe call
+
+type pipeconn struct {
+	net.Conn
+	remote net.Conn
+}
+
+var _ transport.StreamConn = (*pipeconn)(nil)
+
+// newStreamConnFromPipeConns creates a new [transport.StreamConn] that wraps around the local [net.Conn].
+// The remote [net.Conn] will be closed when you call CloseRead() on the returned [transport.StreamConn]
+func newStreamConnFromPipeConns(local, remote net.Conn) (transport.StreamConn, error) {
+	if local == nil || remote == nil {
+		return nil, errors.New("local conn and remote conn are required")
+	}
+	return &pipeconn{local, remote}, nil
+}
+
+func (c *pipeconn) Close() error {
+	return errors.Join(c.CloseRead(), c.CloseWrite())
+}
+
+// CloseRead makes sure all read on the local conn returns io.EOF, and write on the remote conn returns ErrClosedPipe.
+func (c *pipeconn) CloseRead() error {
+	return c.remote.Close()
+}
+
+// CloseWrite makes sure all read on the remote conn returns io.EOF, and write on the local conn returns ErrClosedPipe.
+func (c *pipeconn) CloseWrite() error {
+	return c.Conn.Close()
 }

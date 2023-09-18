@@ -57,10 +57,12 @@ type Tunnel struct {
 //	These will normally be localhost with a high-numbered port.
 //
 // `dohdns` is the initial DOH transport.
-// `listener` will be notified at the completion of every tunneled socket.
-func NewTunnel(fakedns string, dohdns doh.Transport, tun io.Closer, protector protect.Protector, listener Listener) (t *Tunnel, err error) {
-	if listener == nil {
-		return nil, errors.New("listener is required")
+// `eventListener` will be notified at the completion of every tunneled socket.
+func NewTunnel(
+	fakedns string, dohdns doh.Transport, tun io.Closer, protector protect.Protector, eventListener Listener,
+) (t *Tunnel, err error) {
+	if eventListener == nil {
+		return nil, errors.New("eventListener is required")
 	}
 
 	fakeDNSAddr, err := net.ResolveUDPAddr("udp", fakedns)
@@ -75,12 +77,12 @@ func NewTunnel(fakedns string, dohdns doh.Transport, tun io.Closer, protector pr
 		tun: tun,
 	}
 
-	t.sd, err = makeIntraStreamDialer(fakeDNSAddr.AddrPort(), dohdns, protector, listener, t.sni)
+	t.sd, err = newIntraStreamDialer(fakeDNSAddr.AddrPort(), dohdns, protector, eventListener, t.sni)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create stream dialer: %w", err)
 	}
 
-	t.pp, err = makeIntraPacketProxy(fakeDNSAddr.AddrPort(), dohdns, protector, listener)
+	t.pp, err = newIntraPacketProxy(fakeDNSAddr.AddrPort(), dohdns, protector, eventListener)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create packet proxy: %w", err)
 	}
