@@ -17,7 +17,6 @@ package intra
 import (
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/netip"
 	"sync/atomic"
@@ -67,9 +66,6 @@ func newIntraPacketProxy(
 
 // NewSession implements PacketProxy.NewSession.
 func (p *intraPacketProxy) NewSession(resp network.PacketResponseReceiver) (network.PacketRequestSender, error) {
-	log.Println("[debug] initializing a new UDP session...")
-	defer log.Println("[info] New UDP session initialized")
-
 	dohResp := &dohPacketRespReceiver{
 		PacketResponseReceiver: resp,
 		stats:                  makeTracker(),
@@ -77,7 +73,6 @@ func (p *intraPacketProxy) NewSession(resp network.PacketResponseReceiver) (netw
 	}
 	req, err := p.proxy.NewSession(dohResp)
 	if err != nil {
-		log.Printf("[error] failed to create UDP session: %v\n", err)
 		return nil, fmt.Errorf("failed to create new session: %w", err)
 	}
 
@@ -119,41 +114,31 @@ var _ network.PacketResponseReceiver = (*dohPacketRespReceiver)(nil)
 
 // WriteTo implements PacketRequestSender.WriteTo. It will query the DoH server if the packet a DNS packet.
 func (req *dohPacketReqSender) WriteTo(p []byte, destination netip.AddrPort) (int, error) {
-	log.Printf("[debug] Sending raw UDP packet (%v bytes) to %v\n", len(p), destination)
-
-	if destination == req.proxy.fakeDNSAddr {
+	if isEquivalentAddrPort(destination, req.proxy.fakeDNSAddr) {
 		defer func() {
 			// conn was only used for this DNS query, so it's unlikely to be used again
 			if req.stats.download.Load() == 0 && req.stats.upload.Load() == 0 {
-				log.Println("[debug] DoH dedicated session finished, Closing...")
 				req.Close()
 			}
 		}()
 
-		log.Println("[debug] Doing DNS request over DoH server...")
 		resp, err := (*req.proxy.dns.Load()).Query(p)
 		if err != nil {
-			log.Printf("[error] DoH request failed: %v\n", err)
 			return 0, fmt.Errorf("DoH request error: %w", err)
 		}
 		if len(resp) == 0 {
-			log.Println("[error] DoH response is empty")
 			return 0, errors.New("empty DoH response")
 		}
 
-		log.Printf("[info] Write DoH response (%v bytes) from %v\n", len(resp), req.proxy.fakeDNSAddr)
 		return req.response.writeFrom(resp, net.UDPAddrFromAddrPort(req.proxy.fakeDNSAddr), false)
 	}
 
-	log.Printf("[debug] UDP Session: upload %v bytes to %v\n", len(p), destination)
 	req.stats.upload.Add(int64(len(p)))
 	return req.PacketRequestSender.WriteTo(p, destination)
 }
 
 // Close terminates the UDP session, and reports session stats to the listener.
 func (resp *dohPacketRespReceiver) Close() error {
-	log.Println("[debug] UDP session terminating...")
-	defer log.Printf("[info] UDP session terminated: down = %v, up = %v\n", resp.stats.download.Load(), resp.stats.upload.Load())
 	if resp.listener != nil {
 		resp.listener.OnUDPSocketClosed(&UDPSocketSummary{
 			Duration:      int32(time.Since(resp.stats.start)),
@@ -166,7 +151,6 @@ func (resp *dohPacketRespReceiver) Close() error {
 
 // WriteFrom implements PacketResponseReceiver.WriteFrom.
 func (resp *dohPacketRespReceiver) WriteFrom(p []byte, source net.Addr) (int, error) {
-	log.Printf("[debug] Receiving raw UDP packet (%v bytes) from %v\n", len(p), source)
 	return resp.writeFrom(p, source, true)
 }
 
@@ -174,7 +158,6 @@ func (resp *dohPacketRespReceiver) WriteFrom(p []byte, source net.Addr) (int, er
 // It will also add len(p) to downloadBytes if doStat is true.
 func (resp *dohPacketRespReceiver) writeFrom(p []byte, source net.Addr, doStat bool) (int, error) {
 	if doStat {
-		log.Printf("[debug] UDP Session: download %v bytes from %v\n", len(p), source)
 		resp.stats.download.Add(int64(len(p)))
 	}
 	return resp.PacketResponseReceiver.WriteFrom(p, source)

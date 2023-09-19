@@ -18,7 +18,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"net"
 	"net/netip"
 	"sync/atomic"
@@ -64,14 +63,12 @@ func newIntraStreamDialer(
 
 // Dial implements StreamDialer.Dial.
 func (sd *intraStreamDialer) Dial(ctx context.Context, raddr string) (transport.StreamConn, error) {
-	log.Printf("[debug] Dialing TCP traffic to %v\n", raddr)
 	dest, err := netip.ParseAddrPort(raddr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid raddr (%v): %w", raddr, err)
 	}
 
-	if dest == sd.fakeDNSAddr {
-		log.Println("[debug] Doing DoT request over DoH server...")
+	if isEquivalentAddrPort(dest, sd.fakeDNSAddr) {
 		src, dst := net.Pipe()
 		go doh.Accept(*sd.dns.Load(), dst)
 		return newStreamConnFromPipeConns(src, dst)
@@ -98,17 +95,13 @@ func (sd *intraStreamDialer) SetDNS(dns doh.Transport) error {
 
 func (sd *intraStreamDialer) dial(ctx context.Context, dest netip.AddrPort, stats *TCPSocketSummary) (transport.StreamConn, error) {
 	if dest.Port() == 443 {
-		log.Println("[debug] Dialing HTTPS traffic")
 		if sd.alwaysSplitHTTPS.Load() {
-			log.Println("[debug] Dialing TCP traffic over split dialer")
 			return split.DialWithSplit(sd.dialer, net.TCPAddrFromAddrPort(dest))
 		} else {
-			log.Println("[debug] Dialing TCP traffic over retryable split dialer")
 			stats.Retry = &split.RetryStats{}
 			return split.DialWithSplitRetry(sd.dialer, net.TCPAddrFromAddrPort(dest), stats.Retry)
 		}
 	} else {
-		log.Println("[debug] Dialing TCP traffic directly over internet")
 		tcpsd := &transport.TCPStreamDialer{
 			Dialer: *sd.dialer,
 		}
