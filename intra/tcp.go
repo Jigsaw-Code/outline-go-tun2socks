@@ -18,33 +18,14 @@ package intra
 
 import (
 	"io"
-	"net"
+	"net/netip"
+	"sync"
+	"sync/atomic"
 	"time"
 
-	"github.com/eycorsican/go-tun2socks/common/log"
-	"github.com/eycorsican/go-tun2socks/core"
-
-	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/doh"
 	"github.com/Jigsaw-Code/outline-go-tun2socks/intra/split"
+	"github.com/Jigsaw-Code/outline-sdk/transport"
 )
-
-// TCPHandler is a core TCP handler that also supports DOH and splitting control.
-type TCPHandler interface {
-	core.TCPConnHandler
-	SetDNS(doh.Transport)
-	SetAlwaysSplitHTTPS(bool)
-	EnableSNIReporter(file io.ReadWriter, suffix, country string) error
-}
-
-type tcpHandler struct {
-	TCPHandler
-	fakedns          net.TCPAddr
-	dns              doh.Atomic
-	alwaysSplitHTTPS bool
-	dialer           *net.Dialer
-	listener         TCPListener
-	sniReporter      tcpSNIReporter
-}
 
 // TCPSocketSummary provides information about each TCP socket, reported when it is closed.
 type TCPSocketSummary struct {
@@ -57,116 +38,107 @@ type TCPSocketSummary struct {
 	Retry *split.RetryStats
 }
 
+func makeTCPSocketSummary(dest netip.AddrPort) *TCPSocketSummary {
+	stats := &TCPSocketSummary{
+		ServerPort: int16(dest.Port()),
+	}
+	if stats.ServerPort != 0 && stats.ServerPort != 80 && stats.ServerPort != 443 {
+		stats.ServerPort = -1
+	}
+	return stats
+}
+
 // TCPListener is notified when a socket closes.
 type TCPListener interface {
 	OnTCPSocketClosed(*TCPSocketSummary)
 }
 
-// NewTCPHandler returns a TCP forwarder with Intra-style behavior.
-// Connections to `fakedns` are redirected to DOH.
-// All other traffic is forwarded using `dialer`.
-// `listener` is provided with a summary of each socket when it is closed.
-func NewTCPHandler(fakedns net.TCPAddr, dialer *net.Dialer, listener TCPListener) TCPHandler {
-	return &tcpHandler{
-		fakedns:  fakedns,
-		dialer:   dialer,
-		listener: listener,
+type tcpWrapConn struct {
+	transport.StreamConn
+
+	wg           *sync.WaitGroup
+	rDone, wDone atomic.Bool
+
+	beginTime time.Time
+	stats     *TCPSocketSummary
+
+	listener    TCPListener
+	sniReporter *tcpSNIReporter
+}
+
+func makeTCPWrapConn(c transport.StreamConn, stats *TCPSocketSummary, listener TCPListener, sniReporter *tcpSNIReporter) (conn *tcpWrapConn) {
+	conn = &tcpWrapConn{
+		StreamConn:  c,
+		wg:          &sync.WaitGroup{},
+		beginTime:   time.Now(),
+		stats:       stats,
+		listener:    listener,
+		sniReporter: sniReporter,
 	}
-}
 
-// TODO: Propagate TCP RST using local.Abort(), on appropriate errors.
-func (h *tcpHandler) handleUpload(local core.TCPConn, remote split.DuplexConn, upload chan int64) {
-	bytes, _ := remote.ReadFrom(local)
-	local.CloseRead()
-	remote.CloseWrite()
-	upload <- bytes
-}
+	// Wait until both read and write are done
+	conn.wg.Add(2)
+	go func() {
+		conn.wg.Wait()
+		conn.stats.Duration = int32(time.Since(conn.beginTime))
+		if conn.listener != nil {
+			conn.listener.OnTCPSocketClosed(conn.stats)
+		}
+		if conn.stats.Retry != nil && conn.sniReporter != nil {
+			conn.sniReporter.Report(*conn.stats)
+		}
+	}()
 
-func (h *tcpHandler) handleDownload(local core.TCPConn, remote split.DuplexConn) (bytes int64, err error) {
-	bytes, err = io.Copy(local, remote)
-	local.CloseWrite()
-	remote.CloseRead()
 	return
 }
 
-func (h *tcpHandler) forward(local net.Conn, remote split.DuplexConn, summary *TCPSocketSummary) {
-	localtcp := local.(core.TCPConn)
-	upload := make(chan int64)
-	start := time.Now()
-	go h.handleUpload(localtcp, remote, upload)
-	download, _ := h.handleDownload(localtcp, remote)
-	summary.DownloadBytes = download
-	summary.UploadBytes = <-upload
-	summary.Duration = int32(time.Since(start).Seconds())
-	h.listener.OnTCPSocketClosed(summary)
-	if summary.Retry != nil {
-		h.sniReporter.Report(*summary)
-	}
+func (conn *tcpWrapConn) Close() error {
+	defer conn.close(&conn.wDone)
+	defer conn.close(&conn.rDone)
+	return conn.StreamConn.Close()
 }
 
-func filteredPort(addr net.Addr) int16 {
-	_, port, err := net.SplitHostPort(addr.String())
-	if err != nil {
-		return -1
-	}
-	if port == "80" {
-		return 80
-	}
-	if port == "443" {
-		return 443
-	}
-	if port == "0" {
-		return 0
-	}
-	return -1
+func (conn *tcpWrapConn) CloseRead() error {
+	defer conn.close(&conn.rDone)
+	return conn.StreamConn.CloseRead()
 }
 
-// TODO: Request upstream to make `conn` a `core.TCPConn` so we can avoid a type assertion.
-func (h *tcpHandler) Handle(conn net.Conn, target *net.TCPAddr) error {
-	// DNS override
-	if target.IP.Equal(h.fakedns.IP) && target.Port == h.fakedns.Port {
-		dns := h.dns.Load()
-		go doh.Accept(dns, conn)
-		return nil
-	}
-	var summary TCPSocketSummary
-	summary.ServerPort = filteredPort(target)
-	start := time.Now()
-	var c split.DuplexConn
-	var err error
-	// TODO: Cancel dialing if c is closed.
-	if summary.ServerPort == 443 {
-		if h.alwaysSplitHTTPS {
-			c, err = split.DialWithSplit(h.dialer, target)
-		} else {
-			summary.Retry = &split.RetryStats{}
-			c, err = split.DialWithSplitRetry(h.dialer, target, summary.Retry)
-		}
-	} else {
-		var generic net.Conn
-		generic, err = h.dialer.Dial(target.Network(), target.String())
-		if generic != nil {
-			c = generic.(*net.TCPConn)
-		}
-	}
-	if err != nil {
-		return err
-	}
-	summary.Synack = int32(time.Since(start).Seconds() * 1000)
-	go h.forward(conn, c, &summary)
-	log.Infof("new proxy connection for target: %s:%s", target.Network(), target.String())
-	return nil
+func (conn *tcpWrapConn) CloseWrite() error {
+	defer conn.close(&conn.wDone)
+	return conn.StreamConn.CloseWrite()
 }
 
-func (h *tcpHandler) SetDNS(dns doh.Transport) {
-	h.dns.Store(dns)
-	h.sniReporter.SetDNS(dns)
+func (conn *tcpWrapConn) Read(b []byte) (n int, err error) {
+	defer func() {
+		conn.stats.DownloadBytes += int64(n)
+	}()
+	return conn.StreamConn.Read(b)
 }
 
-func (h *tcpHandler) SetAlwaysSplitHTTPS(s bool) {
-	h.alwaysSplitHTTPS = s
+func (conn *tcpWrapConn) WriteTo(w io.Writer) (n int64, err error) {
+	defer func() {
+		conn.stats.DownloadBytes += n
+	}()
+	return io.Copy(w, conn.StreamConn)
 }
 
-func (h *tcpHandler) EnableSNIReporter(file io.ReadWriter, suffix, country string) error {
-	return h.sniReporter.Configure(file, suffix, country)
+func (conn *tcpWrapConn) Write(b []byte) (n int, err error) {
+	defer func() {
+		conn.stats.UploadBytes += int64(n)
+	}()
+	return conn.StreamConn.Write(b)
+}
+
+func (conn *tcpWrapConn) ReadFrom(r io.Reader) (n int64, err error) {
+	defer func() {
+		conn.stats.UploadBytes += n
+	}()
+	return io.Copy(conn.StreamConn, r)
+}
+
+func (conn *tcpWrapConn) close(done *atomic.Bool) {
+	// make sure conn.wg is being called at most once for a specific `done` flag
+	if done.CompareAndSwap(false, true) {
+		conn.wg.Done()
+	}
 }
