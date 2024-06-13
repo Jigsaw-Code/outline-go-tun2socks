@@ -1,5 +1,6 @@
 /build
 /bin
+/_obj
 intra/split/example/example
 
 # General
